@@ -155,10 +155,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   release-validation:
-    name: Validate all Visual NNG levels
+    name: Validate release UI and all Visual NNG levels
     needs: docker
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 120
     permissions:
       contents: read
       packages: read
@@ -186,7 +186,7 @@ jobs:
         run: |
           npm ci
           npm install --no-save --package-lock=false --legacy-peer-deps puppeteer-core@24
-      - name: Validate all Visual NNG levels without isolation
+      - name: Validate the release through browser player interactions
         working-directory: Lean4Game/lean4game
         env:
           IMAGE: ghcr.io/${{ github.repository }}:latest
@@ -203,15 +203,18 @@ jobs:
             curl --fail --silent http://127.0.0.1:8083/ >/dev/null && break
             sleep 1
           done
-          node scripts/run-mobile-module-playthrough.mjs http://127.0.0.1:8083 canonical-release-all-levels
+          node scripts/run-cypress.cjs run \
+            --browser "$CHROME_PATH" \
+            --config baseUrl=http://127.0.0.1:8083 \
+            --env VISUAL_TIMEOUT=600000,LEAN4GAME_MOUNT=/lean4game/index.html
       - name: Upload release validation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: canonical-release-validation-${{ github.run_id }}
           path: |
-            Lean4Game/lean4game/cypress/results/canonical-release-all-levels.json
-            Lean4Game/lean4game/cypress/results/canonical-release-all-levels-failure.png
+            Lean4Game/lean4game/cypress/results/*.json
+            Lean4Game/lean4game/cypress/screenshots/**
           if-no-files-found: warn
           retention-days: 14
 
