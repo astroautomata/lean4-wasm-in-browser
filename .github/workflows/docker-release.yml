@@ -205,6 +205,7 @@ jobs:
           done
           node scripts/run-cypress.cjs run \
             --browser "$CHROME_PATH" \
+            --spec "cypress/e2e/nng4-classic-diagnostics.cy.ts,cypress/e2e/nng4-classic-mode-persistence.cy.ts,cypress/e2e/nng4-implication-and-display-regressions.cy.ts,cypress/e2e/nng4-release-routes.cy.ts,cypress/e2e/nng4-visual-complete-playthrough.cy.ts,cypress/e2e/telemetry-loading-consent.cy.ts,cypress/e2e/visual-loading-and-implication-guides.cy.ts,cypress/e2e/visual-mobile-pagination-stability.cy.ts,cypress/e2e/visualtest-local-wasm-smoke.cy.ts,cypress/e2e/visual-wasm-worker-diagnostic.cy.ts" \
             --config baseUrl=http://127.0.0.1:8083 \
             --env VISUAL_TIMEOUT=600000,LEAN4GAME_MOUNT=/lean4game/index.html
       - name: Upload release validation evidence
