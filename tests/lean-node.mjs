@@ -85,6 +85,7 @@ export async function bootLean({ root, wasmPath, quiet = true } = {}) {
 
   // Inject config past the glue's hoisted `var Module`, and run as CJS with the
   // real __filename so pthread workers can resolve lean.js.
+  globalThis.self ??= globalThis;
   globalThis.__leanCfg = Module;
   const wrapped = 'Module = globalThis.__leanCfg;\n' + source;
   const fn = vm.compileFunction(wrapped, ['exports', 'require', 'module', '__filename', '__dirname'], { filename: leanJsPath });

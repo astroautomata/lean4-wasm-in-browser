@@ -1,22 +1,31 @@
 name: playground tests
 
-# Integration tests that boot the real Lean WASM compiler headless in Node and
-# check it compiles a suite of Lean snippets correctly. The multi-GB wasm/oleans
-# aren't in the repo, so fetch-artifacts.mjs pulls them from a GitHub release
-# fixture (GitHub-hosted — the live deploy behind Cloudflare 403s CI IPs).
+# Boot the exact browser-release compiler headlessly and check representative
+# Lean programs. The release artifact supplies matching executable IR beside
+# its oleans, avoiding drift from a separately maintained fixture.
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["Browser game Docker release"]
+    types: [completed]
   workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Completed Browser game Docker release run ID
+        required: true
+        type: string
 
-# One run at a time; a newer trigger cancels an in-flight one.
 concurrency:
   group: playground-tests
   cancel-in-progress: true
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   test:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -24,15 +33,29 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Node 24+: earlier V8 caps WASM exports at 100k, but the -sEXPORT_ALL
-          # lean.wasm has ~201k exports and won't instantiate below that.
-          node-version: 24
+          # Match the Node version used to link and probe this large runtime.
+          node-version: 25.9.0
 
-      # No `npm ci`: the tests use only Node built-ins (node:test, node:vm, fetch).
-      - name: Fetch deployed Lean artifacts
-        run: node tests/fetch-artifacts.mjs
-        env:
-          LEAN_URL: https://lean.cau.li
+      - name: Download the validated browser runtime
+        uses: actions/download-artifact@v4
+        with:
+          pattern: visual-lean-libs-*
+          merge-multiple: true
+          path: browser-runtime
+          run-id: ${{ github.event.workflow_run.id || inputs.release_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Assemble the headless compiler fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf tests/.artifacts
+          mkdir -p tests/.artifacts/bin tests/.artifacts/lib/lean
+          cp browser-runtime/runtime/lean.js browser-runtime/runtime/lean.wasm tests/.artifacts/bin/
+          tar -xzf browser-runtime/modules/game-modules.tar.gz -C tests/.artifacts/lib/lean
+          test -s tests/.artifacts/lib/lean/Init.olean
+          test "$(find tests/.artifacts/lib/lean -type f -name '*.ir' | wc -l)" -gt 0
+
+      # No npm install is needed: these tests use Node built-ins only.
       - name: Run compiler integration tests
-        run: node --test tests/*.test.mjs
+        run: node --stack-size=8192 --test tests/*.test.mjs
