@@ -19,6 +19,11 @@ on:
         required: false
         default: main
         type: string
+      runtime_run_id:
+        description: Compatible prior release run containing the browser-runtime artifact
+        required: false
+        default: ''
+        type: string
   push:
     branches:
       - main
@@ -32,6 +37,7 @@ concurrency:
 jobs:
   browser-runtime:
     name: Build single-thread Lean WASM module artifact
+    if: ${{ inputs.runtime_run_id == '' }}
     uses: ryyanmapes/lean4game/.github/workflows/build-browser-lean-libs.yml@main
     with:
       lean4game_ref: ${{ inputs.lean4game_ref || 'main' }}
@@ -44,6 +50,7 @@ jobs:
   docker:
     name: Assemble, validate, and publish browser game
     needs: browser-runtime
+    if: ${{ always() && (needs.browser-runtime.result == 'success' || inputs.runtime_run_id != '') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
@@ -78,6 +85,8 @@ jobs:
           pattern: visual-lean-libs-*
           merge-multiple: true
           path: visual-lean-artifact
+          run-id: ${{ inputs.runtime_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Verify canonical runtime artifact
         run: |
           test -s visual-lean-artifact/runtime/lean.js
