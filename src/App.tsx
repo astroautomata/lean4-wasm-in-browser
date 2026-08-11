@@ -1,65 +1,47 @@
 import './App.css'
 
-const games = [
-  {
-    title: 'The Natural Numbers Game',
-    eyebrow: 'Vanilla NNG4',
-    description:
-      'Learn Lean by proving the foundations of arithmetic in the original tactic-based game.',
-    href: '/lean4game/index.html#/g/local/NNG4',
-    action: 'Play NNG4',
-    variant: 'classic',
-  },
-  {
-    title: 'Visual Natural Numbers Game',
-    eyebrow: 'Visual Lean',
-    description:
-      'Build the same formally checked proofs by directly manipulating expressions and proof goals.',
-    href: '/lean4game/index.html#/g/local/NNG4/visual',
-    action: 'Play Visual Lean',
-    variant: 'visual',
-  },
-  {
-    title: 'Visual Capabilities Demo',
-    eyebrow: 'Visual Test',
-    description:
-      'Explore Visual Lean interactions and proof mechanics in a focused demonstration world.',
-    href: '/lean4game/index.html#/g/local/VisualTest/visual',
-    action: 'Open Visual Test',
-    variant: 'visual',
-  },
+const destinations = [
+  { title: 'Start here: The Visual Natural Numbers Game', description: 'Formally prove the foundational properties of arithmetic!', href: '/lean4game/index.html#/g/local/NNG4/visual', accent: 'violet', symbol: '∀' },
+  { title: 'Elevator Pitch', description: "Take a brief tour of Visual Lean's three modes.", href: '/lean4game/index.html#/g/local/VisualTest/visual', accent: 'blue', symbol: '→' },
+  { title: 'The Natural Numbers Game Classic', description: 'Play the Natural Numbers Game as it was originally designed, typing Lean code yourself.', href: '/lean4game/index.html#/g/local/NNG4', accent: 'teal', symbol: 'ℕ' },
 ] as const
 
 function App() {
   return (
-    <main className="release-shell">
-      <section className="hero" aria-labelledby="site-title">
-        <p className="kicker">Lean in your browser</p>
-        <h1 id="site-title">The Natural Numbers Game</h1>
-        <p className="intro">
-          Choose how you want to play. Every version runs Lean locally in your
-          browser, and every completed proof is checked by Lean.
-        </p>
+    <main className="landing-page">
+      <section className="landing-hero" aria-labelledby="site-title">
+        <div className="hero-mark" aria-hidden="true"><span>⊢</span></div>
+        <h1 id="site-title">Visual Lean</h1>
+        <p>An experimental graphical user interface for writing Lean code.</p>
+        <p>Lean verification runs locally on both desktop and mobile.</p>
       </section>
 
-      <section className="game-grid" aria-label="Choose a game">
-        {games.map((game) => (
-          <a className={`game-card ${game.variant}`} href={game.href} key={game.href}>
-            <span className="game-eyebrow">{game.eyebrow}</span>
-            <h2>{game.title}</h2>
-            <p>{game.description}</p>
-            <span className="game-action">
-              {game.action}
-              <span aria-hidden="true">→</span>
+      <nav className="destination-list" aria-label="Visual Lean experiences">
+        {destinations.map((destination, index) => (
+          <a className={`destination destination-${destination.accent}`} href={destination.href} key={destination.href}>
+            <span className="destination-number" aria-hidden="true">0{index + 1}</span>
+            <span className="destination-copy">
+              <span className="destination-title">{destination.title}</span>
+              <span className="destination-description">{destination.description}</span>
             </span>
+            <span className="destination-symbol" aria-hidden="true">{destination.symbol}</span>
+            <span className="destination-arrow" aria-hidden="true">↗</span>
           </a>
         ))}
-      </section>
+      </nav>
 
-      <p className="local-note">
-        No account or hosted proof server is required. Your Lean session stays
-        on this device.
-      </p>
+      <a className="credits-prompt" href="#credits">
+        <span>Scroll down for credits VVV</span>
+        <span className="credits-line" aria-hidden="true" />
+      </a>
+
+      <footer className="credits" id="credits">
+        <p>Visual Lean was designed and orchestrated by <a href="https://autumnofautumn.com/">Autumn Mapes</a> under the advisement of <a href="https://gowers.wordpress.com/">Timothy Gowers</a>, <a href="https://astroautomata.com/">Miles Cranmer</a>, and <a href="https://www.damtp.cam.ac.uk/user/mjc249/home.html">Matthew Colbrook</a>.</p>
+        <p>Visual Lean was coded with the help of Codex and Claude Code.</p>
+        <p>Visual Lean is built on a WASM port of Lean 4, <a href="https://github.com/cauli/lean4-wasm-in-browser">Lean4.js</a>.</p>
+        <p>The Natural Numbers Game was originally designed by Kevin Buzzard and Mohammad Pedramfar for Lean 3, and later ported to Lean 4 by Kevin Buzzard and Jon Eugster.</p>
+        <p>The code for Visual Lean can be found publically at <a href="https://github.com/ryyanmapes/lean4game">https://github.com/ryyanmapes/lean4game</a>. Visual Lean is distributed with a license info tbd</p>
+      </footer>
     </main>
   )
 }
