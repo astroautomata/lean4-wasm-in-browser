@@ -21,36 +21,18 @@ a { -webkit-tap-highlight-color: transparent; }
 
 .landing-hero {
   display: flex;
-  min-height: min(650px, 76vh);
-  padding: 88px 0 72px;
+  min-height: min(430px, 55vh);
+  padding: 46px 0 38px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
 }
 
-.hero-mark {
-  display: grid;
-  width: 76px;
-  height: 76px;
-  margin-bottom: 28px;
-  color: #cfb5ff;
-  background: linear-gradient(145deg, rgba(139, 92, 246, 0.28), rgba(80, 132, 220, 0.12));
-  border: 1px solid rgba(188, 155, 255, 0.5);
-  border-radius: 24px;
-  box-shadow: 0 0 50px rgba(139, 92, 246, 0.22);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 2.35rem;
-  place-items: center;
-  transform: rotate(-4deg);
-}
-
-.hero-mark span { transform: rotate(4deg); }
-
 h1 {
   max-width: 100%;
   margin: 0 0 24px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: inherit;
   font-size: clamp(4rem, 11vw, 8.5rem);
   font-weight: 500;
   letter-spacing: -0.065em;
@@ -67,7 +49,7 @@ h1 {
   padding: clamp(28px, 5vw, 56px) clamp(18px, 3vw, 34px);
   color: inherit;
   border-bottom: 1px solid #2c3950;
-  grid-template-columns: 64px minmax(0, 1fr) 100px 40px;
+  grid-template-columns: minmax(0, 1fr) 40px;
   gap: clamp(12px, 3vw, 32px);
   align-items: center;
   text-decoration: none;
@@ -77,26 +59,10 @@ h1 {
 .destination-blue { --destination-accent: #81b9ff; }
 .destination-teal { --destination-accent: #4bd8bd; }
 .destination:hover, .destination:focus-visible { background: color-mix(in srgb, var(--destination-accent) 9%, transparent); border-color: color-mix(in srgb, var(--destination-accent) 60%, #2c3950); outline: none; }
-.destination-number { color: #6f7f9a; font-size: 0.78rem; font-weight: 750; letter-spacing: 0.12em; }
 .destination-copy { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
 .destination-title { font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.55rem, 3.8vw, 2.75rem); line-height: 1.12; }
 .destination-description { max-width: 680px; color: #97a6bf; font-size: clamp(0.92rem, 1.8vw, 1.08rem); line-height: 1.55; }
 
-.destination-symbol {
-  display: grid;
-  width: 86px;
-  height: 86px;
-  color: var(--destination-accent);
-  background: color-mix(in srgb, var(--destination-accent) 9%, #101b2e);
-  border: 1px solid color-mix(in srgb, var(--destination-accent) 54%, #25334a);
-  border-radius: 24px;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 2.15rem;
-  place-items: center;
-  transition: box-shadow 180ms ease, transform 180ms ease;
-}
-
-.destination:hover .destination-symbol, .destination:focus-visible .destination-symbol { box-shadow: 0 0 32px color-mix(in srgb, var(--destination-accent) 26%, transparent); transform: translateY(-3px); }
 .destination-arrow { color: var(--destination-accent); font-size: 1.55rem; text-align: right; }
 
 .credits-prompt {
@@ -123,18 +89,16 @@ h1 {
 
 @media (max-width: 700px) {
   .landing-page { width: min(100% - 28px, 520px); }
-  .landing-hero { min-height: 580px; padding-top: 64px; }
+  .landing-hero { min-height: 360px; padding: 38px 0 30px; }
   h1 { font-size: clamp(3.1rem, 15vw, 4rem); }
-  .hero-mark { width: 64px; height: 64px; border-radius: 20px; font-size: 2rem; }
-  .destination { min-height: 210px; grid-template-columns: 34px minmax(0, 1fr) 34px; grid-template-rows: auto auto; }
+  .destination { min-height: 180px; grid-template-columns: minmax(0, 1fr) 34px; }
   .destination-copy { align-self: end; }
-  .destination-symbol { width: 62px; height: 62px; border-radius: 18px; grid-column: 2; grid-row: 2; font-size: 1.65rem; }
-  .destination-arrow { grid-column: 3; grid-row: 1 / span 2; }
+  .destination-arrow { grid-column: 2; }
   .credits-prompt { min-height: 250px; font-size: 0.68rem; }
   .credits { min-height: auto; padding-bottom: 100px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .destination, .destination-symbol { transition: none; }
+  .destination { transition: none; }
 }
