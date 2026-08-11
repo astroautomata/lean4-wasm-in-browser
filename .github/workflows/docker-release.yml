@@ -221,7 +221,9 @@ jobs:
 
   pages:
     name: Publish the smoke-tested image to GitHub Pages
-    needs: docker
+    # Never publish merely because the image assembled. The browser-player
+    # suite above verifies the exact container that Pages will extract.
+    needs: [docker, release-validation]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
