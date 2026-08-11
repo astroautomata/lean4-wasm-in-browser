@@ -24,6 +24,11 @@ on:
         required: false
         default: ''
         type: string
+      reuse_published_image:
+        description: Validate and publish the already smoke-tested latest image
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -37,7 +42,7 @@ concurrency:
 jobs:
   browser-runtime:
     name: Build single-thread Lean WASM module artifact
-    if: ${{ inputs.runtime_run_id == '' }}
+    if: ${{ inputs.runtime_run_id == '' && !inputs.reuse_published_image }}
     uses: ryyanmapes/lean4game/.github/workflows/build-browser-lean-libs.yml@main
     with:
       lean4game_ref: ${{ inputs.lean4game_ref || 'main' }}
@@ -50,7 +55,7 @@ jobs:
   docker:
     name: Assemble, validate, and publish browser game
     needs: browser-runtime
-    if: ${{ always() && (needs.browser-runtime.result == 'success' || inputs.runtime_run_id != '') }}
+    if: ${{ !inputs.reuse_published_image && always() && (needs.browser-runtime.result == 'success' || inputs.runtime_run_id != '') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
@@ -166,6 +171,7 @@ jobs:
   release-validation:
     name: Validate release UI and all Visual NNG levels
     needs: docker
+    if: ${{ always() && (needs.docker.result == 'success' || inputs.reuse_published_image) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
@@ -233,6 +239,7 @@ jobs:
     # Never publish merely because the image assembled. The browser-player
     # suite above verifies the exact container that Pages will extract.
     needs: [docker, release-validation]
+    if: ${{ always() && needs.release-validation.result == 'success' && (needs.docker.result == 'success' || inputs.reuse_published_image) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
