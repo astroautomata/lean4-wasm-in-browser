@@ -13,11 +13,16 @@ export function createDatabase(connectionString) {
   })
 
   async function migrate() {
-    const sql = await fs.readFile(path.join(directory, '..', 'migrations', '001_initial.sql'), 'utf8')
+    const migrationsDirectory = path.join(directory, '..', 'migrations')
+    const migrationFiles = (await fs.readdir(migrationsDirectory))
+      .filter(file => file.endsWith('.sql')).sort()
     const client = await pool.connect()
     try {
       await client.query('SELECT pg_advisory_lock(710426314)')
-      await client.query(sql)
+      for (const file of migrationFiles) {
+        const sql = await fs.readFile(path.join(migrationsDirectory, file), 'utf8')
+        await client.query(sql)
+      }
     } finally {
       await client.query('SELECT pg_advisory_unlock(710426314)').catch(() => {})
       client.release()
@@ -76,5 +81,32 @@ export function createDatabase(connectionString) {
     }
   }
 
-  return { pool, migrate, store }
+  async function storeFeedback(feedback) {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      if (feedback.userId) {
+        await client.query(`
+          INSERT INTO anonymous_users (user_id, first_seen, last_seen)
+          VALUES ($1, $2, $2)
+          ON CONFLICT (user_id) DO UPDATE SET last_seen = GREATEST(anonymous_users.last_seen, EXCLUDED.last_seen)
+        `, [feedback.userId, feedback.clientTs])
+      }
+      await client.query(`
+        INSERT INTO feedback_reports
+          (report_id, user_id, game_id, world_id, level_id, mode, message, proof_state, client_ts)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (report_id) DO NOTHING
+      `, [feedback.reportId, feedback.userId, feedback.gameId, feedback.worldId,
+        feedback.levelId, feedback.mode, feedback.message, feedback.proofState, feedback.clientTs])
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+  }
+
+  return { pool, migrate, store, storeFeedback }
 }

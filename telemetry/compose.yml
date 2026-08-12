@@ -17,6 +17,8 @@ services:
   collector:
     image: ghcr.io/ryyanmapes/lean4-wasm-in-browser-telemetry:latest
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,6 +32,18 @@ services:
       REQUESTS_PER_MINUTE: ${REQUESTS_PER_MINUTE:-120}
     ports:
       - 127.0.0.1:8090:8080
+
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    restart: unless-stopped
+    depends_on:
+      - collector
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   telemetry_postgres:

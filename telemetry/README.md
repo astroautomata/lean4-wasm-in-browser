@@ -11,6 +11,10 @@ PostgreSQL. It does not execute Lean and is not part of proof validation.
    password with a long random value. Do not commit `.env`.
 3. Run `docker compose -f compose.yml pull` and then
    `docker compose -f compose.yml up -d`.
+   The included Watchtower service checks every five minutes by default and
+   replaces the collector when a new `latest` image is published. Only the
+   collector opts in; Watchtower does not update PostgreSQL. Adjust
+   `WATCHTOWER_POLL_INTERVAL` in `.env` if desired.
 4. Reverse proxy HTTPS to `127.0.0.1:8090` when Caddy runs on the host. For
    Caddy:
 
@@ -37,11 +41,21 @@ PostgreSQL. It does not execute Lean and is not part of proof validation.
    }
    ```
 
-   If Watchtower is restricted to named containers, add the resulting collector
-   container name (normally `<project>-collector-1`) to its command.
-
 5. Verify `https://telemetry.leangame.autumnofautumn.com/healthz` returns
    `{"status":"ok"}`.
+
+Watchtower needs the Docker socket in order to replace the collector, which
+effectively gives that container administrative control over Docker on the
+host. The Compose file pins Watchtower to `1.7.1` and opts in only the
+collector. Note that the upstream Watchtower project was archived in December
+2025; keep the pin explicit and revisit this updater if Docker compatibility
+changes.
+
+Check updater activity with:
+
+```sh
+docker compose -f compose.yml logs --tail=100 watchtower
+```
 
 The collector applies its idempotent migration automatically at startup. It
 accepts either `DATABASE_URL` or the standard PostgreSQL `PGHOST`, `PGUSER`,
@@ -63,6 +77,9 @@ localhost origin only while developing.
   classic editor steps are compact line edits (`from_line`, `removed_lines`,
   inserted `command`) rather than repeated copies of the whole proof.
 - `attributes jsonb` columns provide an extension point without schema changes.
+- `feedback_reports` stores a player-submitted message with its game, level,
+  mode, and current proof state. Its `user_id` is nullable and is populated
+  only when the player has enabled anonymous telemetry.
 
 PostgreSQL automatically TOAST-compresses larger scripts. Normalization avoids
 repeating UUID and level strings for every step, and PostgreSQL enums encode

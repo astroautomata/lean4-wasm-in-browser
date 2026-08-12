@@ -1,6 +1,6 @@
 import http from 'node:http'
 import { createDatabase } from './database.js'
-import { validateBatch } from './validation.js'
+import { validateBatch, validateFeedback } from './validation.js'
 
 const port = Number(process.env.PORT || 8080)
 const databaseUrl = process.env.DATABASE_URL
@@ -50,12 +50,13 @@ const server = http.createServer(async (request, response) => {
     response.end('{"status":"ok"}')
     return
   }
-  if (request.method === 'OPTIONS' && url.pathname === '/v1/events') {
+  const isSubmissionPath = url.pathname === '/v1/events' || url.pathname === '/v1/feedback'
+  if (request.method === 'OPTIONS' && isSubmissionPath) {
     response.writeHead(origin && allowedOrigins.has(origin) ? 204 : 403, cors)
     response.end()
     return
   }
-  if (request.method !== 'POST' || url.pathname !== '/v1/events') {
+  if (request.method !== 'POST' || !isSubmissionPath) {
     response.writeHead(404).end()
     return
   }
@@ -79,13 +80,22 @@ const server = http.createServer(async (request, response) => {
   }
   let body
   try { body = JSON.parse(raw) } catch {}
-  const events = validateBatch(body)
-  if (!events) {
-    response.writeHead(400, cors).end()
-    return
-  }
   try {
-    await database.store(events)
+    if (url.pathname === '/v1/feedback') {
+      const feedback = validateFeedback(body)
+      if (!feedback) {
+        response.writeHead(400, cors).end()
+        return
+      }
+      await database.storeFeedback(feedback)
+    } else {
+      const events = validateBatch(body)
+      if (!events) {
+        response.writeHead(400, cors).end()
+        return
+      }
+      await database.store(events)
+    }
     response.writeHead(204, cors).end()
   } catch (error) {
     console.error('Telemetry database write failed:', error instanceof Error ? error.message : error)

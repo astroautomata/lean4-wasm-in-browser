@@ -63,3 +63,31 @@ export function validateBatch(body) {
   const events = body.events.map(validateEvent)
   return events.every(Boolean) ? events : null
 }
+
+export function validateFeedback(value) {
+  if (!value || typeof value !== 'object') return null
+  if (!UUID_RE.test(value.report_id)) return null
+  if (value.user_uuid != null && !UUID_RE.test(value.user_uuid)) return null
+  if (!MODES.has(value.mode)) return null
+  if (!safePath(value.game_id, true) || !safePath(value.world_id, false)) return null
+  if (!Number.isInteger(value.level_id) || value.level_id < 0 || value.level_id > 100000) return null
+  if (typeof value.ts !== 'string' || !Number.isFinite(Date.parse(value.ts))) return null
+  if (typeof value.message !== 'string') return null
+  const message = value.message.trim()
+  if (!message || message.length > 1000) return null
+  if (!value.proof_state || typeof value.proof_state !== 'object' || Array.isArray(value.proof_state)) return null
+  let proofStateSize
+  try { proofStateSize = Buffer.byteLength(JSON.stringify(value.proof_state), 'utf8') } catch { return null }
+  if (proofStateSize > 256 * 1024) return null
+  return {
+    reportId: value.report_id,
+    userId: value.user_uuid ?? null,
+    gameId: value.game_id,
+    worldId: value.world_id,
+    levelId: value.level_id,
+    mode: value.mode,
+    message,
+    proofState: value.proof_state,
+    clientTs: new Date(value.ts),
+  }
+}
