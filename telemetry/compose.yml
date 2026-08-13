@@ -15,7 +15,7 @@ services:
       retries: 10
 
   collector:
-    image: ghcr.io/ryyanmapes/lean4-wasm-in-browser-telemetry:latest
+    image: ghcr.io/astroautomata/lean4-wasm-in-browser-telemetry:latest
     restart: unless-stopped
     labels:
       com.centurylinklabs.watchtower.enable: "true"
