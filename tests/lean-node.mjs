@@ -1,13 +1,13 @@
 // Boot the Lean WASM compiler headless in Node (no browser) and expose a
 // synchronous-ish compile(code) -> { tag, diagnostics }.
 //
-// This is the same binary the deployed playground runs, driven directly instead
-// of through the browser UI. It's a pthread build, but Emscripten's glue speaks
-// Node (worker_threads + SharedArrayBuffer), so it runs under `node`.
+// This is the same single-threaded binary the deployed playground runs, driven
+// directly instead of through the browser UI. The linked Emscripten glue owns
+// its memory configuration, just as it does in the browser.
 //
 // Layout expected under `root`:
 //   root/bin/lean.js     the Emscripten glue
-//   root/bin/lean.wasm   the wasm (must be the 2GB-memory-patched build)
+//   root/bin/lean.wasm   the matching linked wasm
 //   root/lib/lean/**     the .olean library (at least Init's closure)
 //
 // getBuildDir (inside lean_init_search_path) resolves the lib dir relative to the
@@ -20,9 +20,8 @@ import { createRequire } from 'node:module';
 
 export async function bootLean({ root, wasmPath, quiet = true } = {}) {
   const leanJsPath = path.join(root, 'bin/lean.js');
-  // The 2GB-patched wasm; defaults to root/bin/lean.wasm (that's what a CI fetch
-  // of the deployed, already-patched wasm produces). Override for local dev,
-  // where the raw artifact's wasm is the unpatched 16MB build.
+  // Defaults to the matching linked runtime. An override remains useful when
+  // testing another compiler artifact locally.
   wasmPath = wasmPath || path.join(root, 'bin/lean.wasm');
   if (!fs.existsSync(leanJsPath)) throw new Error(`lean.js not found at ${leanJsPath}`);
   if (!fs.existsSync(wasmPath)) throw new Error(`lean.wasm not found at ${wasmPath}`);
@@ -48,7 +47,6 @@ export async function bootLean({ root, wasmPath, quiet = true } = {}) {
 
   const Module = {
     noInitialRun: true,
-    INITIAL_MEMORY: 2048 * 1024 * 1024,
     locateFile: (p) => (p.endsWith('.wasm') ? wasmPath : path.join(root, 'bin', p)),
     print: onLine,
     printErr: onLine,
