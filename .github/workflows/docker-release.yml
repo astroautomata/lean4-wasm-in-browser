@@ -231,7 +231,7 @@ jobs:
           done
           node scripts/run-cypress.cjs run \
             --browser "$CHROME_PATH" \
-            --spec "cypress/e2e/nng4-classic-diagnostics.cy.ts,cypress/e2e/nng4-classic-mode-persistence.cy.ts,cypress/e2e/nng4-implication-and-display-regressions.cy.ts,cypress/e2e/nng4-less-or-equal-total-goal-choice.cy.ts,cypress/e2e/nng4-release-routes.cy.ts,cypress/e2e/release-landing-page.cy.ts,cypress/e2e/telemetry-loading-consent.cy.ts,cypress/e2e/visual-loading-and-implication-guides.cy.ts,cypress/e2e/visualtest-local-wasm-smoke.cy.ts,cypress/e2e/visual-wasm-worker-diagnostic.cy.ts" \
+            --spec "cypress/e2e/nng4-classic-diagnostics.cy.ts,cypress/e2e/nng4-classic-mode-persistence.cy.ts,cypress/e2e/nng4-implication-and-display-regressions.cy.ts,cypress/e2e/nng4-induction-transform.cy.ts,cypress/e2e/nng4-less-or-equal-total-goal-choice.cy.ts,cypress/e2e/nng4-release-routes.cy.ts,cypress/e2e/release-landing-page.cy.ts,cypress/e2e/telemetry-loading-consent.cy.ts,cypress/e2e/visual-loading-and-implication-guides.cy.ts,cypress/e2e/visualtest-local-wasm-smoke.cy.ts,cypress/e2e/visual-wasm-worker-diagnostic.cy.ts" \
             --config baseUrl=http://127.0.0.1:8083 \
             --env VISUAL_TIMEOUT=600000,LEAN4GAME_MOUNT=/lean4game/index.html
       - name: Upload release validation evidence
@@ -245,12 +245,82 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  release-levels:
+    name: Validate every Visual Lean level (shard ${{ matrix.shard_index }} of 8)
+    needs: docker
+    if: ${{ always() && (needs.docker.result == 'success' || inputs.reuse_published_image) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard_index: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - name: Check out Lean4Game player tests
+        uses: actions/checkout@v4
+        with:
+          repository: ryyanmapes/lean4game
+          ref: ${{ inputs.lean4game_ref || 'main' }}
+          path: Lean4Game/lean4game
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up Node for the every-level release gate
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Lean4Game/lean4game/package-lock.json
+      - name: Install player-test dependencies
+        working-directory: Lean4Game/lean4game
+        run: npm ci
+      - name: Complete every level through the packaged browser runtime
+        working-directory: Lean4Game/lean4game
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:latest
+          VISUAL_TIMEOUT: 600000
+          EXPECT_CROSS_ORIGIN_ISOLATED: 'false'
+          CYPRESS_VISUAL_SHARD_INDEX: ${{ matrix.shard_index }}
+          CYPRESS_VISUAL_SHARD_TOTAL: 8
+        run: |
+          set -euo pipefail
+          cleanup() { docker rm --force "visual-levels-${{ matrix.shard_index }}" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          export CHROME_PATH="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)"
+          test -n "$CHROME_PATH"
+          docker run --detach --name "visual-levels-${{ matrix.shard_index }}" --publish 8083:80 "$IMAGE"
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:8083/lean4game/index.html >/dev/null && break
+            sleep 1
+          done
+          node scripts/run-cypress.cjs run \
+            --browser "$CHROME_PATH" \
+            --spec cypress/e2e/nng4-visual-complete-playthrough.cy.ts \
+            --config baseUrl=http://127.0.0.1:8083 \
+            --env VISUAL_TIMEOUT=600000,LEAN4GAME_MOUNT=/lean4game/index.html
+      - name: Upload every-level release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-levels-${{ github.run_id }}-${{ matrix.shard_index }}
+          path: |
+            Lean4Game/lean4game/cypress/results/*.json
+            Lean4Game/lean4game/cypress/screenshots/**
+          if-no-files-found: warn
+          retention-days: 14
+
   pages:
     name: Publish the smoke-tested image to GitHub Pages
     # Never publish merely because the image assembled. The browser-player
     # suite above verifies the exact container that Pages will extract.
-    needs: [docker, release-validation]
-    if: ${{ always() && needs.release-validation.result == 'success' && (needs.docker.result == 'success' || inputs.reuse_published_image) }}
+    needs: [docker, release-validation, release-levels]
+    if: ${{ always() && needs.release-validation.result == 'success' && needs.release-levels.result == 'success' && (needs.docker.result == 'success' || inputs.reuse_published_image) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
