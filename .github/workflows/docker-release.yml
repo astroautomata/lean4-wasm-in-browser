@@ -101,6 +101,17 @@ jobs:
           test -s visual-lean-artifact/gamedata/VisualTest/game.json
           ! grep -q 'PThread' visual-lean-artifact/runtime/lean.js
           du -sh visual-lean-artifact
+      # A reused runtime belongs to an older run. Preserve it on this release
+      # as well so workflow_run consumers can validate the exact runtime that
+      # this release actually published.
+      - name: Preserve reused browser runtime for downstream tests
+        if: ${{ inputs.runtime_run_id != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-lean-libs-reused-${{ github.run_id }}
+          path: visual-lean-artifact
+          if-no-files-found: error
+          retention-days: 30
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry
