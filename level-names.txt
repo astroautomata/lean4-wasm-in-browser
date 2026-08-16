@@ -1,0 +1,74 @@
+# Visual Lean release level titles
+# Format: game | source file | title
+# `[VISUAL-SKIPPED]` levels remain available in Classic mode.
+
+NNG4 | Tutorial/L01rfl.lean | `rfl`
+NNG4 | Tutorial/L02rw.lean | `rw`
+NNG4 | Tutorial/L03two_eq_ss0.lean | Numbers
+NNG4 [VISUAL-SKIPPED] | Tutorial/L04rw_backwards.lean | Rewriting Backwards ⏭️
+NNG4 | Tutorial/L05add_zero.lean | Adding Zero
+NNG4 [VISUAL-SKIPPED] | Tutorial/L06add_zero2.lean | Precision Rewriting ⏭️
+NNG4 | Tutorial/L07add_succ.lean | `add_succ`
+NNG4 | Tutorial/L08twoaddtwo.lean | `2 + 2 = 4` 🌶️
+NNG4 | Addition/L01zero_add.lean | `zero_add`
+NNG4 | Addition/L02succ_add.lean | `succ_add`
+NNG4 | Addition/L03add_comm.lean | Commutativity of Addition
+NNG4 | Addition/L04add_assoc.lean | Associativity of Addition
+NNG4 | Addition/L05add_right_comm.lean | `add_right_comm`
+NNG4 | Multiplication/L01mul_one.lean | `mul_one`
+NNG4 | Multiplication/L02zero_mul.lean | `zero_mul`
+NNG4 | Multiplication/L03succ_mul.lean | `succ_mul`
+NNG4 | Multiplication/L04mul_comm.lean | `mul_comm`
+NNG4 | Multiplication/L05one_mul.lean | `one_mul`
+NNG4 | Multiplication/L06two_mul.lean | `two_mul`
+NNG4 | Multiplication/L07mul_add.lean | `mul_add`
+NNG4 | Multiplication/L08add_mul.lean | `add_mul`
+NNG4 | Multiplication/L09mul_assoc.lean | `mul_assoc`
+NNG4 | Power/L01zero_pow_zero.lean | `zero_pow_zero`
+NNG4 | Power/L02zero_pow_succ.lean | `zero_pow_succ`
+NNG4 | Power/L03pow_one.lean | `pow_one`
+NNG4 | Power/L04one_pow.lean | `one_pow`
+NNG4 | Power/L05pow_two.lean | `pow_two`
+NNG4 | Power/L06pow_add.lean | `pow_add`
+NNG4 | Power/L07mul_pow.lean | `mul_pow`
+NNG4 | Power/L08pow_pow.lean | `pow_pow`
+NNG4 | Power/L09add_sq.lean | `add_sq` 🌶️
+NNG4 | Power/L10FLT.lean | Fermat's Last Theorem ❌ (Does not count towards completion)
+NNG4 | Implication/L01exact.lean | `exact`
+NNG4 | Implication/L02exact2.lean | `exact` Practice
+NNG4 | Implication/L03apply.lean | `apply`
+NNG4 | Implication/L04succ_inj.lean | `succ_inj`
+NNG4 [VISUAL-SKIPPED] | Implication/L05succ_inj2.lean | Arguing Backwards ⏭️
+NNG4 | Implication/L06intro.lean | `intro`
+NNG4 | Implication/L07intro2.lean | `intro` Practice
+NNG4 | Implication/L08ne.lean | `≠`
+NNG4 | Implication/L09zero_ne_succ.lean | `zero_ne_succ`
+NNG4 | Implication/L10one_ne_zero.lean | `1 ≠ 0`
+NNG4 | Implication/L11two_add_two_ne_five.lean | `2 + 2 ≠ 5`
+NNG4 | LessOrEqual/L01le_refl.lean | `use`
+NNG4 | LessOrEqual/L02zero_le.lean | Positivity
+NNG4 | LessOrEqual/L03le_succ_self.lean | Successor is Increasing
+NNG4 | LessOrEqual/L04le_trans.lean | Transitivity
+NNG4 | LessOrEqual/L05le_zero.lean | `x ≤ 0 → x = 0`
+NNG4 | LessOrEqual/L06le_antisymm.lean | Antisymmetry 🌶️
+NNG4 | LessOrEqual/L07or_symm.lean | `∨`
+NNG4 | LessOrEqual/L08le_total.lean | `≤` is Total 🌶️
+NNG4 | LessOrEqual/L09succ_le_succ.lean | `succ x ≤ succ y → x ≤ y`
+NNG4 | LessOrEqual/L10le_one.lean | `le_one`
+NNG4 | LessOrEqual/L11le_two.lean | `le_two`
+NNG4 | AdvAddition/L01add_right_cancel.lean | `add_right_cancel`
+NNG4 | AdvAddition/L02add_left_cancel.lean | `add_left_cancel`
+NNG4 | AdvAddition/L03add_left_eq_self.lean | `add_left_eq_self`
+NNG4 | AdvAddition/L04add_right_eq_self.lean | `add_right_eq_self`
+NNG4 | AdvAddition/L05add_right_eq_zero.lean | `add_right_eq_zero` 🌶️
+NNG4 | AdvAddition/L06add_left_eq_zero.lean | `add_left_eq_zero`
+NNG4 | AdvMultiplication/L01mul_le_mul_right.lean | `mul_le_mul_right`
+NNG4 | AdvMultiplication/L02mul_left_ne_zero.lean | `mul_left_ne_zero`
+NNG4 | AdvMultiplication/L03eq_succ_of_ne_zero.lean | `eq_succ_of_ne_zero`
+NNG4 | AdvMultiplication/L04one_le_of_ne_zero.lean | `one_le_of_ne_zero`
+NNG4 | AdvMultiplication/L05le_mul_right.lean | `le_mul_right`
+NNG4 | AdvMultiplication/L06mul_right_eq_one.lean | `mul_right_eq_one`
+NNG4 | AdvMultiplication/L07mul_ne_zero.lean | `mul_ne_zero`
+NNG4 | AdvMultiplication/L08mul_eq_zero.lean | `mul_eq_zero`
+NNG4 | AdvMultiplication/L09mul_left_cancel.lean | `mul_left_cancel`
+NNG4 | AdvMultiplication/L10mul_right_eq_self.lean | `mul_right_eq_self`

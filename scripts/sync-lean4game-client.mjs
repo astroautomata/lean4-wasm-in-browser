@@ -8,6 +8,8 @@ const lean4jsRoot = path.resolve(here, '..')
 const workspaceRoot = path.resolve(lean4jsRoot, '..')
 const lean4gameRoot = path.join(workspaceRoot, 'Lean4Game', 'lean4game')
 const outDir = path.join(lean4jsRoot, 'public', 'lean4game')
+const workspaceLevelNamesPath = path.join(workspaceRoot, 'level-names.txt')
+const bundledLevelNamesPath = path.join(lean4jsRoot, 'level-names.txt')
 
 async function exists(p) {
   try {
@@ -58,6 +60,36 @@ async function copyGameData(gameName) {
   }
   await mkdir(dest, { recursive: true })
   await cp(source, dest, { recursive: true, force: true })
+}
+
+async function applyEditableNngLevelNames() {
+  const editableLevelNamesPath = await exists(workspaceLevelNamesPath)
+    ? workspaceLevelNamesPath
+    : bundledLevelNamesPath
+  if (!(await exists(editableLevelNamesPath))) return
+
+  const names = await readFile(editableLevelNamesPath, 'utf8')
+  const dest = path.join(outDir, 'data', 'g', 'local', 'NNG4')
+  for (const line of names.split(/\r?\n/u)) {
+    const match = /^NNG4(?: \[VISUAL-SKIPPED\])? \| ([^|]+) \| (.+)$/u.exec(line.trim())
+    if (!match) continue
+
+    const sourcePath = match[1].trim().replaceAll('\\', '/')
+    // Fermat's displayed name is maintained by omitNngAlgorithmWorld below;
+    // do not let the editable list alter its current release wording.
+    if (sourcePath === 'Power/L10FLT.lean') continue
+    const sourceMatch = /^([^/]+)\/L(\d+)[^/]*\.lean$/u.exec(sourcePath)
+    if (!sourceMatch) continue
+
+    const world = sourceMatch[1]
+    const level = Number.parseInt(sourceMatch[2], 10)
+    const levelPath = path.join(dest, `level__${world}__${level}.json`)
+    if (!(await exists(levelPath))) continue
+
+    const levelData = JSON.parse(await readFile(levelPath, 'utf8'))
+    levelData.displayName = match[2].trim().replaceAll('`', '')
+    await writeFile(levelPath, `${JSON.stringify(levelData)}\n`)
+  }
 }
 
 async function omitNngAlgorithmWorld() {
@@ -136,6 +168,7 @@ await cp(dist, outDir, { recursive: true, force: true })
 // a 23 MiB emoji font), so do not ship it in the release sub-app.
 await rm(path.join(outDir, 'fonts'), { recursive: true, force: true })
 await copyGameData('NNG4')
+await applyEditableNngLevelNames()
 await omitNngAlgorithmWorld()
 await copyGameData('VisualTest')
 
