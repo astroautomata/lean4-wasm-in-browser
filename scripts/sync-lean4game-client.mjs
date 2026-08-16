@@ -80,6 +80,18 @@ async function omitNngAlgorithmWorld() {
     game.tile.levels = Object.values(game.worldSize ?? {}).reduce((sum, size) => sum + Number(size), 0)
   }
 
+  // The checked-in NNG4 gamedata can lag behind the current Lean source.
+  // Keep the completion-neutral final level's release metadata current even
+  // when a machine syncing the static site does not have Lake installed.
+  game.completionNeutralLevels ??= {}
+  game.completionNeutralLevels.Power = Array.from(new Set([
+    ...(game.completionNeutralLevels.Power ?? []),
+    10,
+  ])).sort((left, right) => left - right)
+  if (Array.isArray(game.skippedLevels?.Power)) {
+    game.skippedLevels.Power = game.skippedLevels.Power.filter(level => level !== 10)
+  }
+
   await writeFile(gamePath, `${JSON.stringify(game)}\n`)
   for (const file of await readdir(dest)) {
     if (file.startsWith('level__Algorithm__') && file.endsWith('.json')) {
@@ -90,6 +102,17 @@ async function omitNngAlgorithmWorld() {
       const normalized = contents.replaceAll('The Natural Number Game', 'The Natural Numbers Game')
       if (normalized !== contents) await writeFile(filePath, normalized)
     }
+  }
+  const fermatPath = path.join(dest, 'level__Power__10.json')
+  if (await exists(fermatPath)) {
+    const fermat = JSON.parse(await readFile(fermatPath, 'utf8'))
+    fermat.title = "Fermat's Last Theorem ❌"
+    fermat.completionNeutral = true
+    fermat.visualSkipLevel = false
+    fermat.visualGoalInfos = [
+      { position: 'below', arrow: false, text: 'Good luck!' },
+    ]
+    await writeFile(fermatPath, `${JSON.stringify(fermat)}\n`)
   }
 }
 
