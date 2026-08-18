@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>ℕ</text></svg>"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a1222" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="stylesheet" href="/src/App.css" />
+    <link rel="stylesheet" href="/src/congratulations.css" />
+    <meta
+      name="description"
+      content="You finished the Visual Natural Numbers Game. Thank you for playing."
+    />
+    <title>Congratulations! · Visual Lean</title>
+  </head>
+  <body>
+    <main class="landing-page">
+      <section class="landing-hero congratulations-hero" aria-labelledby="page-title">
+        <h1 id="page-title" class="congratulations-title">🎉 Congratulations! 🎉</h1>
+        <p>Thank you for playing!</p>
+        <p>We hope you enjoyed your time and learned a bit about formal mathematics and Lean.</p>
+        <p>
+          If you'd like to learn more about Lean, we recommend checking out
+          <a href="https://github.com/ImperialCollegeLondon/formalising-mathematics-2024">Kevin Buzzard's course</a>.
+        </p>
+      </section>
+
+      <section class="final-feedback" aria-labelledby="final-feedback-title">
+        <h2 id="final-feedback-title">Feel free to leave any last feedback below.</h2>
+
+        <form id="final-feedback-form" novalidate>
+          <label for="final-feedback-message">
+            This form will send your message to the Visual Lean team.
+          </label>
+          <textarea
+            id="final-feedback-message"
+            name="message"
+            maxlength="1000"
+            rows="6"
+            aria-describedby="final-feedback-count"
+          ></textarea>
+          <div id="final-feedback-count" class="final-feedback-count">0/1000</div>
+          <button type="submit" id="final-feedback-submit" class="final-feedback-submit" disabled>
+            Submit feedback
+          </button>
+          <p id="final-feedback-status" class="final-feedback-status" hidden></p>
+        </form>
+      </section>
+
+      <nav class="destination-list congratulations-links" aria-label="Where to go next">
+        <a class="destination destination-violet" href="/">
+          <span class="destination-copy"
+            ><span class="destination-title">Back to the start</span
+            ><span class="destination-description">Return to the Visual Lean home page.</span></span
+          >
+          <span class="destination-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="destination destination-teal" href="/lean4game/index.html#/g/local/NNG4">
+          <span class="destination-copy"
+            ><span class="destination-title">The Natural Numbers Game Classic</span
+            ><span class="destination-description"
+              >Play it again the original way, typing Lean code yourself.</span
+            ></span
+          >
+          <span class="destination-arrow" aria-hidden="true">→</span>
+        </a>
+      </nav>
+    </main>
+
+    <script type="module" src="/src/congratulations.ts"></script>
+  </body>
+</html>

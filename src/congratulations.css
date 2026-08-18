@@ -1,0 +1,107 @@
+/* The landing hero sizes its heading for the single word "Visual Lean". This
+   title is far longer and carries emoji, so it needs its own ceiling. */
+.congratulations-hero { min-height: min(360px, 46vh); }
+
+.congratulations-title {
+  font-size: clamp(2.1rem, 6.5vw, 4.6rem);
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+}
+
+.congratulations-hero p:first-of-type {
+  margin-top: 8px;
+  color: #d7e0ef;
+  font-size: clamp(1.05rem, 2.3vw, 1.45rem);
+}
+
+.congratulations-hero a {
+  color: #d2bcff;
+  text-decoration-color: rgba(210, 188, 255, 0.42);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.congratulations-hero a:hover,
+.congratulations-hero a:focus-visible { color: #e6dcff; text-decoration-color: currentColor; }
+
+.final-feedback {
+  display: flex;
+  padding: clamp(28px, 5vw, 48px) 0 clamp(32px, 6vw, 56px);
+  border-top: 1px solid #2c3950;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.final-feedback h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.25rem, 2.9vw, 1.9rem);
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.final-feedback form { display: flex; flex-direction: column; gap: 10px; }
+.final-feedback label { color: #97a6bf; font-size: clamp(0.9rem, 1.7vw, 1rem); line-height: 1.5; }
+
+.final-feedback textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #2c3950;
+  border-radius: 10px;
+  background: rgba(12, 20, 38, 0.85);
+  color: inherit;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.final-feedback textarea:focus-visible {
+  border-color: color-mix(in srgb, #b79dff 62%, #2c3950);
+  outline: none;
+}
+
+.final-feedback textarea:disabled { opacity: 0.6; }
+
+.final-feedback-count { color: #7d8ba4; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.final-feedback-count.invalid { color: #ff9a9a; }
+
+.final-feedback-submit {
+  align-self: flex-start;
+  padding: 11px 22px;
+  border: 1px solid color-mix(in srgb, #b79dff 55%, #2c3950);
+  border-radius: 999px;
+  background: color-mix(in srgb, #b79dff 14%, transparent);
+  color: #f5f4ff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1rem;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.final-feedback-submit:hover:not(:disabled),
+.final-feedback-submit:focus-visible:not(:disabled) {
+  border-color: #b79dff;
+  background: color-mix(in srgb, #b79dff 24%, transparent);
+  outline: none;
+}
+
+.final-feedback-submit:disabled { opacity: 0.45; cursor: default; }
+
+.final-feedback-status { margin: 0; font-size: 0.95rem; }
+.final-feedback-status.success { color: #4bd8bd; }
+.final-feedback-status.error { color: #ff9a9a; }
+
+.congratulations-links { border-bottom: 1px solid #2c3950; }
+.congratulations-links .destination { min-height: 128px; }
+.congratulations-links .destination-title { font-size: clamp(1.2rem, 2.6vw, 1.75rem); }
+
+@media (max-width: 700px) {
+  .congratulations-hero { min-height: 300px; padding: 38px 0 30px; }
+  .congratulations-links .destination { min-height: 132px; }
+  .final-feedback-submit { align-self: stretch; text-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .final-feedback-submit { transition: none; }
+}

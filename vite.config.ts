@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -26,4 +27,15 @@ const lean4GameSubApp = {
 
 export default defineConfig({
   plugins: [lean4GameSubApp, react()],
+  build: {
+    rollupOptions: {
+      // Vite only builds index.html unless the extra pages are named here.
+      // The completion page is a plain static URL so it stays linkable from
+      // the Lean4Game sub-app and from anywhere else.
+      input: {
+        index: resolve(import.meta.dirname, 'index.html'),
+        congratulations: resolve(import.meta.dirname, 'congratulations.html'),
+      },
+    },
+  },
 })
