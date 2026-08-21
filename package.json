@@ -1,5 +1,6 @@
 {
   "name": "visual-natural-number-game",
+  "license": "GPL-3.0-only",
   "private": true,
   "version": "0.0.0",
   "type": "module",

@@ -91,3 +91,20 @@ public/visual-lean/               generated WASM runtime and module bundle
 scripts/sync-lean4game-client.mjs release client/data synchronization
 telemetry/                        optional PostgreSQL event collector
 ```
+
+## License
+
+Visual Lean is licensed under the **GNU General Public License v3.0** — see
+[LICENSE](LICENSE).
+
+The published site is a combined work built from:
+
+- [lean4game](https://github.com/leanprover-community/lean4game) — GPL-3.0,
+  which is why the combined work is GPL-3.0
+- [The Natural Number Game](https://github.com/leanprover-community/NNG4) — Apache-2.0
+- [Lean 4](https://github.com/leanprover/lean4) and Mathlib — Apache-2.0
+- [monaco-vscode-api](https://github.com/CodinGame/monaco-vscode-api) — MIT
+
+Apache-2.0 and MIT are one-way compatible into GPL-3.0, so they impose no
+additional conditions on the whole; their own copyright and attribution
+notices are retained.
