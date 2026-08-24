@@ -167,6 +167,12 @@ await cp(dist, outDir, { recursive: true, force: true })
 // Lean4Game's public/fonts directory is a second, unreferenced copy (including
 // a 23 MiB emoji font), so do not ship it in the release sub-app.
 await rm(path.join(outDir, 'fonts'), { recursive: true, force: true })
+// The game client now uses real URLs (/visualNNG, /g/local/NNG4/world/...),
+// none of which exist as files. GitHub Pages serves 404.html for those, so it
+// has to be the game shell; its asset references are absolute, which makes the
+// same document work from any path. The landing page and completion page are
+// real files and still win over this fallback.
+await cp(path.join(outDir, 'index.html'), path.join(lean4jsRoot, 'public', '404.html'), { force: true })
 await copyGameData('NNG4')
 await applyEditableNngLevelNames()
 await omitNngAlgorithmWorld()
