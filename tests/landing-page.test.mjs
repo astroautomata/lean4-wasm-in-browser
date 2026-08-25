@@ -25,9 +25,13 @@ test('landing page preserves the supplied copy', () => {
 })
 
 test('landing-page destinations point to the three local release experiences', () => {
-  assert.match(app, /\/g\/local\/NNG4\/visual/)
-  assert.match(app, /\/g\/local\/VisualTest\/visual/)
-  assert.match(app, /\/g\/local\/NNG4'/)
+  for (const href of ['/visualNNG', '/pitch', '/classicNNG']) {
+    assert.ok(app.includes(`href: '${href}'`), `component is missing ${href}`)
+    assert.ok(page.includes(`href="${href}"`), `shipped page is missing ${href}`)
+  }
+  for (const source of [app, page]) {
+    assert.doesNotMatch(source, /\/lean4game\/index\.html#\/g\/local/u)
+  }
 })
 
 test('credit placeholders are resolved as links', () => {
@@ -62,10 +66,11 @@ test('each destination keeps its assigned accent in both sources', () => {
     ['/classicNNG', 'blue'],
   ]
   for (const [href, accent] of accents) {
-    assert.ok(
-      page.includes(`destination-${accent}" href="${href}"`),
-      `index.html destination ${href} is not ${accent}`)
+    for (const source of [app, page]) {
+      assert.ok(
+        source.includes(`destination-${accent}" href="${href}"`) ||
+          source.includes(`href: '${href}', accent: '${accent}'`),
+        `destination ${href} is not ${accent}`)
+    }
   }
-  assert.match(app, /VisualTest\/visual', accent: 'teal'/u)
-  assert.match(app, /local\/NNG4', accent: 'blue'/u)
 })
