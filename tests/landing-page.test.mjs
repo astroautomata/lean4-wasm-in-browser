@@ -17,7 +17,6 @@ const expectedCopy = [
   "Take a brief tour of Visual Lean's three modes.",
   'The Natural Numbers Game Classic',
   'Play the Natural Numbers Game as it was originally designed, typing Lean code yourself.',
-  'Visual Lean was coded with the help of Codex and Claude Code.',
 ]
 
 test('landing page preserves the supplied copy', () => {
@@ -56,22 +55,15 @@ test('credits are a plain heading rather than a scroll prompt', () => {
   }
 })
 
-test('the repository credit is a worded link, with licensing still open', () => {
-  for (const source of [app, page]) {
-    assert.match(source, /href="https:\/\/github\.com\/ryyanmapes\/lean4game">publically on Github</u)
-    assert.match(source, /license info tbd/u)
-  }
-})
-
 test('each destination keeps its assigned accent in both sources', () => {
   const accents = [
-    ['#/g/local/NNG4/visual', 'violet'],
-    ['#/g/local/VisualTest/visual', 'teal'],
-    ['#/g/local/NNG4', 'blue'],
+    ['/visualNNG', 'violet'],
+    ['/pitch', 'teal'],
+    ['/classicNNG', 'blue'],
   ]
   for (const [href, accent] of accents) {
     assert.ok(
-      page.includes(`destination-${accent}" href="/lean4game/index.html${href}"`),
+      page.includes(`destination-${accent}" href="${href}"`),
       `index.html destination ${href} is not ${accent}`)
   }
   assert.match(app, /VisualTest\/visual', accent: 'teal'/u)
