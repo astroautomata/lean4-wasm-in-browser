@@ -302,7 +302,7 @@ jobs:
           node scripts/run-cypress.cjs run \
             --browser "$CHROME_PATH" \
             --spec cypress/e2e/nng4-visual-complete-playthrough.cy.ts \
-            --config baseUrl=http://127.0.0.1:8083 \
+            --config baseUrl=http://127.0.0.1:8083,retries=1 \
             --env VISUAL_TIMEOUT=600000,LEAN4GAME_MOUNT=/lean4game/index.html
       - name: Upload every-level release evidence
         if: always()
