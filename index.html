@@ -18,11 +18,13 @@
     <title>Visual Lean</title>
   </head>
   <body>
-    <main class="landing-page">
+    <!-- No <main>/<footer>/<p>/<br>: those make Safari offer or auto-open
+         Reader view, which throws away the destination links. See App.css. -->
+    <div class="landing-page" role="main">
       <section class="landing-hero" aria-labelledby="site-title">
         <h1 id="site-title">Visual Lean</h1>
-        <p>An experimental graphical user interface for writing Lean code.</p>
-        <p>Lean verification runs locally on both desktop and mobile through WASM.</p>
+        <div class="copy-line">An experimental graphical user interface for writing Lean code.</div>
+        <div class="copy-line">Lean verification runs locally on both desktop and mobile through WASM.</div>
       </section>
 
       <nav class="destination-list" aria-label="Visual Lean experiences">
@@ -40,21 +42,21 @@
         </a>
       </nav>
 
-      <footer class="credits" id="credits">
+      <div class="credits" id="credits" role="contentinfo">
         <h2 class="credits-heading">Credits</h2>
-        <p>Visual Lean was designed and orchestrated by <a href="https://autumnofautumn.com/">Autumn Mapes</a> under the advisement of <a href="https://gowers.wordpress.com/">Timothy Gowers</a>, <a href="https://astroautomata.com/">Miles Cranmer</a>, and <a href="https://www.damtp.cam.ac.uk/user/mjc249/home.html">Matthew Colbrook</a>. It was coded with the help of Codex and Claude Code.</p>
-        <p>Visual Lean is built on a WASM port of Lean 4, <a href="https://github.com/cauli/lean4-wasm-in-browser">Lean4.js</a>, by Cauli Ziani.</p>
-        <p>The Natural Numbers Game was originally designed by Kevin Buzzard and Mohammad Pedramfar for Lean 3, then later ported to Lean 4 with the help of Jon Eugster. Alexander Bentkamp helped with the game engine, and Sian Carey, Ivan Farabella, and Archie Browne all helped add additional levels. </p>
-        <p>Special thanks to Joseph Claver for playtesting Visual Lean!</p>
-        <p>
-          All source code is available publically on Github at the following repositories:<br>
-          <a href="https://github.com/astroautomata/lean4-wasm-in-browser">Lean4.js and Github Pages hosting</a><br>
-          <a href="https://github.com/ryyanmapes/lean4game">Lean4Game frontend engine</a><br>
-          <a href="https://github.com/ryyanmapes/NNG4">Annotated NNG4 content</a><br>
-          <a href="https://github.com/ryyanmapes/VisualTest">Elevator pitch demo</a><br>
-          All are licensed with a GPL-3.0 license.
-        </p>
-      </footer>
-    </main>
+        <div class="copy-line">Visual Lean was designed and orchestrated by <a href="https://autumnofautumn.com/">Autumn Mapes</a> under the advisement of <a href="https://gowers.wordpress.com/">Timothy Gowers</a>, <a href="https://astroautomata.com/">Miles Cranmer</a>, and <a href="https://www.damtp.cam.ac.uk/user/mjc249/home.html">Matthew Colbrook</a>. It was coded with the help of Codex and Claude Code.</div>
+        <div class="copy-line">Visual Lean is built on a WASM port of Lean 4, <a href="https://github.com/cauli/lean4-wasm-in-browser">Lean4.js</a>, by Cauli Ziani.</div>
+        <div class="copy-line">The Natural Numbers Game was originally designed by Kevin Buzzard and Mohammad Pedramfar for Lean 3, then later ported to Lean 4 with the help of Jon Eugster. Alexander Bentkamp helped with the game engine, and Sian Carey, Ivan Farabella, and Archie Browne all helped add additional levels. </div>
+        <div class="copy-line">Special thanks to Joseph Claver for playtesting Visual Lean!</div>
+        <div class="copy-line">
+          <span class="copy-row">All source code is available publically on Github at the following repositories:</span>
+          <span class="copy-row"><a href="https://github.com/astroautomata/lean4-wasm-in-browser">Lean4.js and Github Pages hosting</a></span>
+          <span class="copy-row"><a href="https://github.com/ryyanmapes/lean4game">Lean4Game frontend engine</a></span>
+          <span class="copy-row"><a href="https://github.com/ryyanmapes/NNG4">Annotated NNG4 content</a></span>
+          <span class="copy-row"><a href="https://github.com/ryyanmapes/VisualTest">Elevator pitch demo</a></span>
+          <span class="copy-row">All are licensed with a GPL-3.0 license.</span>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

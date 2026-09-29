@@ -151,6 +151,14 @@ async function omitNngAlgorithmWorld() {
 if (!(await exists(lean4gameRoot))) {
   throw new Error(`Missing Lean4Game client repo: ${lean4gameRoot}`)
 }
+// Check every input before public/lean4game is deleted below; failing later
+// leaves the dev tree with a client but no game data.
+for (const gameName of ['NNG4', 'VisualTest']) {
+  const source = path.join(workspaceRoot, 'Lean4Game', gameName, '.lake', 'gamedata')
+  if (!(await exists(source))) {
+    throw new Error(`Missing generated game data for ${gameName}: ${source}`)
+  }
+}
 
 const [buildClientCmd, buildClientArgs] = npmRunArgs('build:client')
 await run(buildClientCmd, buildClientArgs, { cwd: lean4gameRoot })

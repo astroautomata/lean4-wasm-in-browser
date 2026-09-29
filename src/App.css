@@ -39,7 +39,11 @@ h1 {
   line-height: 0.92;
 }
 
-.landing-hero p { width: 100%; max-width: 680px; margin: 4px 0; color: #aab7cd; font-size: clamp(1rem, 2.1vw, 1.3rem); line-height: 1.55; }
+/* Prose uses <div class="copy-line"> rather than <p>, and the page avoids
+   <main>/<article>/<footer>: Safari offers (or auto-opens) Reader view when it
+   finds an article-shaped block of paragraphs, and its Reader rendering drops
+   the destination links. There is no opt-out meta tag, so do not give it one. */
+.landing-hero .copy-line { width: 100%; max-width: 680px; margin: 4px 0; color: #aab7cd; font-size: clamp(1rem, 2.1vw, 1.3rem); line-height: 1.55; }
 .destination-list { display: flex; border-top: 1px solid #2c3950; flex-direction: column; }
 
 .destination {
@@ -83,7 +87,8 @@ h1 {
   text-align: center;
   text-transform: uppercase;
 }
-.credits p { max-width: 890px; margin: 0; color: #aebbd0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.08rem, 2.2vw, 1.45rem); line-height: 1.65; }
+.credits .copy-line { max-width: 890px; margin: 0; color: #aebbd0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.08rem, 2.2vw, 1.45rem); line-height: 1.65; }
+.credits .copy-row { display: block; }
 .credits a { color: #d2bcff; text-decoration-color: rgba(210, 188, 255, 0.42); text-decoration-thickness: 1px; text-underline-offset: 4px; }
 .credits a:hover, .credits a:focus-visible { color: #e6dcff; text-decoration-color: currentColor; }
 
