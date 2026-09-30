@@ -18,10 +18,12 @@
     <title>Visual Lean</title>
   </head>
   <body>
-    <!-- No <main>/<footer>/<p>/<br>: those make Safari offer or auto-open
-         Reader view, which throws away the destination links. See App.css. -->
-    <div class="landing-page" role="main">
-      <section class="landing-hero" aria-labelledby="site-title">
+    <!-- Keep Safari from offering or auto-opening Reader view, which drops the
+         destination links: no <main>/<footer>/<p>/<br>, no "page"/"content"
+         class names, and site-meta/site-footer/site-scroll mark the prose
+         blocks as non-article. See App.css. -->
+    <div class="landing" id="site-scroll" role="main">
+      <section class="landing-hero site-meta" aria-labelledby="site-title">
         <h1 id="site-title">Visual Lean</h1>
         <div class="copy-line">An experimental graphical user interface for writing Lean code.</div>
         <div class="copy-line">Lean verification runs locally on both desktop and mobile through WASM.</div>
@@ -42,7 +44,7 @@
         </a>
       </nav>
 
-      <div class="credits" id="credits" role="contentinfo">
+      <div class="credits site-footer" id="credits" role="contentinfo">
         <h2 class="credits-heading">Credits</h2>
         <div class="copy-line">Visual Lean was designed and orchestrated by <a href="https://autumnofautumn.com/">Autumn Mapes</a> under the advisement of <a href="https://gowers.wordpress.com/">Timothy Gowers</a>, <a href="https://astroautomata.com/">Miles Cranmer</a>, and <a href="https://www.damtp.cam.ac.uk/user/mjc249/home.html">Matthew Colbrook</a>. It was coded with the help of Codex and Claude Code.</div>
         <div class="copy-line">Visual Lean is built on a WASM port of Lean 4, <a href="https://github.com/cauli/lean4-wasm-in-browser">Lean4.js</a>, by Cauli Ziani.</div>

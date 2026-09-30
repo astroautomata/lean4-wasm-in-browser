@@ -17,7 +17,7 @@ html {
 
 body { min-width: 320px; min-height: 100vh; margin: 0; overflow-x: hidden; }
 a { -webkit-tap-highlight-color: transparent; }
-.landing-page { width: min(1120px, calc(100% - 48px)); margin: 0 auto; overflow: hidden; }
+.landing { width: min(1120px, calc(100% - 48px)); margin: 0 auto; overflow: hidden; }
 
 .landing-hero {
   display: flex;
@@ -39,10 +39,13 @@ h1 {
   line-height: 0.92;
 }
 
-/* Prose uses <div class="copy-line"> rather than <p>, and the page avoids
-   <main>/<article>/<footer>: Safari offers (or auto-opens) Reader view when it
-   finds an article-shaped block of paragraphs, and its Reader rendering drops
-   the destination links. There is no opt-out meta tag, so do not give it one. */
+/* Safari offers (or auto-opens) Reader view when it finds an article-shaped
+   block of prose, and its Reader rendering drops the destination links. There
+   is no opt-out meta tag, so do not give it one: prose uses <div class="copy-line">
+   rather than <p>; there is no <main>/<article>/<footer>; wrappers avoid class
+   names Reader scores as content ("page", "content", "article", "text"); and the
+   hero/credits carry names it scores as non-article (site-meta, site-footer,
+   site-scroll). */
 .landing-hero .copy-line { width: 100%; max-width: 680px; margin: 4px 0; color: #aab7cd; font-size: clamp(1rem, 2.1vw, 1.3rem); line-height: 1.55; }
 .destination-list { display: flex; border-top: 1px solid #2c3950; flex-direction: column; }
 
@@ -93,7 +96,7 @@ h1 {
 .credits a:hover, .credits a:focus-visible { color: #e6dcff; text-decoration-color: currentColor; }
 
 @media (max-width: 700px) {
-  .landing-page { width: min(100% - 28px, 520px); }
+  .landing { width: min(100% - 28px, 520px); }
   .landing-hero { min-height: 360px; padding: 38px 0 30px; }
   h1 { font-size: clamp(3.1rem, 15vw, 4rem); }
   .destination { min-height: 180px; grid-template-columns: minmax(0, 1fr) 34px; }

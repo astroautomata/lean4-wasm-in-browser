@@ -8,8 +8,8 @@ const destinations = [
 
 function App() {
   return (
-    <div className="landing-page" role="main">
-      <section className="landing-hero" aria-labelledby="site-title">
+    <div className="landing" id="site-scroll" role="main">
+      <section className="landing-hero site-meta" aria-labelledby="site-title">
         <div className="hero-mark" aria-hidden="true"><span>⊢</span></div>
         <h1 id="site-title">Visual Lean</h1>
         <div className="copy-line">An experimental graphical user interface for writing Lean code.</div>
@@ -30,7 +30,7 @@ function App() {
         ))}
       </nav>
 
-      <div className="credits" id="credits" role="contentinfo">
+      <div className="credits site-footer" id="credits" role="contentinfo">
         <h2 className="credits-heading">Credits</h2>
         <div className="copy-line">Visual Lean was designed and orchestrated by <a href="https://autumnofautumn.com/">Autumn Mapes</a> under the advisement of <a href="https://gowers.wordpress.com/">Timothy Gowers</a>, <a href="https://astroautomata.com/">Miles Cranmer</a>, and <a href="https://www.damtp.cam.ac.uk/user/mjc249/home.html">Matthew Colbrook</a>.</div>
         <div className="copy-line">Visual Lean was coded with the help of Codex and Claude Code.</div>
