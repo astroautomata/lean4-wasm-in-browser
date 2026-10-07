@@ -2,10 +2,27 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const SAFE_SEGMENT_RE = /^[A-Za-z0-9._-]{1,80}$/u
 const MODES = new Set(['visual', 'classic'])
 const EVENT_TYPES = new Set(['level_start', 'proof_step', 'level_complete'])
-const STEP_TYPES = new Set(['command', 'undo', 'edit'])
+const STEP_TYPES = new Set(['command', 'undo', 'reset', 'edit'])
+const BUILD_REVISION_KEYS = ['site', 'client', 'runtime', 'nng4', 'visualtest', 'lean']
+const BUILD_REVISION_RE = /^[0-9a-f]{7,40}(?:-dirty)?$/u
 
 function text(value, maximum) {
   return typeof value === 'string' ? value.slice(0, maximum) : null
+}
+
+/** The game build a client reports (lean4.js scripts/sync-lean4game-client.mjs):
+ * source revisions plus the build time. Only known, well-formed entries are
+ * kept; a malformed build never costs the event itself. */
+export function validateBuild(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const build = {}
+  for (const key of BUILD_REVISION_KEYS) {
+    if (typeof value[key] === 'string' && BUILD_REVISION_RE.test(value[key])) build[key] = value[key]
+  }
+  if (typeof value.built === 'string' && value.built.length <= 32 && Number.isFinite(Date.parse(value.built))) {
+    build.built = value.built
+  }
+  return Object.keys(build).length > 0 ? build : null
 }
 
 function safePath(value, allowSlash) {
@@ -46,6 +63,7 @@ export function validateEvent(value) {
     command: text(value.command, 64 * 1024),
     fromLine: value.from_line ?? null,
     removedLines: value.removed_lines ?? null,
+    build: validateBuild(value.build),
   }
 
   if (event.eventType === 'proof_step') {
@@ -89,5 +107,6 @@ export function validateFeedback(value) {
     message,
     proofState: value.proof_state,
     clientTs: new Date(value.ts),
+    build: validateBuild(value.build),
   }
 }

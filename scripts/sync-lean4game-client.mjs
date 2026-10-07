@@ -1,5 +1,5 @@
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -8,6 +8,7 @@ const lean4jsRoot = path.resolve(here, '..')
 const workspaceRoot = path.resolve(lean4jsRoot, '..')
 const lean4gameRoot = path.join(workspaceRoot, 'Lean4Game', 'lean4game')
 const outDir = path.join(lean4jsRoot, 'public', 'lean4game')
+const runtimeBuildInfoPath = path.join(lean4jsRoot, 'public', 'visual-lean', 'build-info.json')
 const workspaceLevelNamesPath = path.join(workspaceRoot, 'level-names.txt')
 const bundledLevelNamesPath = path.join(lean4jsRoot, 'level-names.txt')
 
@@ -50,6 +51,50 @@ async function run(cmd, args, options = {}) {
       else reject(new Error(`${cmd} ${args.join(' ')} exited with ${code}`))
     })
   })
+}
+
+const REVISION_RE = /^[0-9a-f]{7,40}$/u
+
+function shortRevision(value) {
+  const revision = String(value ?? '').trim().toLowerCase()
+  return REVISION_RE.test(revision) ? revision.slice(0, 12) : null
+}
+
+/** HEAD of the checkout at `cwd`, marked `-dirty` when tracked files differ
+ * from it; null without git (the Docker build context has no .git). */
+function gitRevision(cwd) {
+  try {
+    const options = { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+    const head = shortRevision(execFileSync('git', ['rev-parse', 'HEAD'], options))
+    if (!head) return null
+    const changes = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], options)
+    return changes.trim() ? `${head}-dirty` : head
+  } catch {
+    return null
+  }
+}
+
+/** Which sources this build of the game was made from. Telemetry attaches it
+ * to every event and feedback report, so recorded play can be matched with the
+ * game that produced it; lean4game/version.json publishes the same record.
+ * GAME_BUILD_SITE / GAME_BUILD_CLIENT override git (the release workflow
+ * passes them into the Docker build). */
+async function gameBuild() {
+  const build = {
+    site: shortRevision(process.env.GAME_BUILD_SITE) ?? gitRevision(lean4jsRoot),
+    client: shortRevision(process.env.GAME_BUILD_CLIENT) ?? gitRevision(lean4gameRoot),
+  }
+  // The Lean runtime and its game modules come from a separate workflow run,
+  // which records the sources it was built from.
+  if (await exists(runtimeBuildInfoPath)) {
+    const runtime = JSON.parse(await readFile(runtimeBuildInfoPath, 'utf8'))
+    build.runtime = shortRevision(runtime.lean4gameRef)
+    build.nng4 = shortRevision(runtime.nng4Ref)
+    build.visualtest = shortRevision(runtime.visualTestRef)
+    build.lean = shortRevision(runtime.leanGithash)
+  }
+  build.built = `${new Date().toISOString().slice(0, 19)}Z`
+  return Object.fromEntries(Object.entries(build).filter(([, value]) => value))
 }
 
 async function copyGameData(gameName) {
@@ -160,8 +205,15 @@ for (const gameName of ['NNG4', 'VisualTest']) {
   }
 }
 
+// Read before anything below rewrites tracked files (public/404.html).
+const build = await gameBuild()
+console.log(`Game build: ${JSON.stringify(build)}`)
+
 const [buildClientCmd, buildClientArgs] = npmRunArgs('build:client')
-await run(buildClientCmd, buildClientArgs, { cwd: lean4gameRoot })
+await run(buildClientCmd, buildClientArgs, {
+  cwd: lean4gameRoot,
+  env: { VITE_GAME_BUILD: JSON.stringify(build) },
+})
 
 const dist = path.join(lean4gameRoot, 'client', 'dist')
 if (!(await exists(dist))) {
@@ -181,6 +233,7 @@ await rm(path.join(outDir, 'fonts'), { recursive: true, force: true })
 // same document work from any path. The landing page and completion page are
 // real files and still win over this fallback.
 await cp(path.join(outDir, 'index.html'), path.join(lean4jsRoot, 'public', '404.html'), { force: true })
+await writeFile(path.join(outDir, 'version.json'), `${JSON.stringify(build, null, 2)}\n`)
 await copyGameData('NNG4')
 await applyEditableNngLevelNames()
 await omitNngAlgorithmWorld()

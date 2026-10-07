@@ -6,6 +6,11 @@ import pg from 'pg'
 const { Pool } = pg
 const directory = path.dirname(fileURLToPath(import.meta.url))
 
+/** `attributes` for a new attempt or feedback row: the game build, if known. */
+function buildAttributes(build) {
+  return JSON.stringify(build ? { build } : {})
+}
+
 export function createDatabase(connectionString) {
   const pool = new Pool({
     ...(connectionString ? { connectionString } : {}),
@@ -39,13 +44,16 @@ export function createDatabase(connectionString) {
           VALUES ($1, $2, $2)
           ON CONFLICT (user_id) DO UPDATE SET last_seen = GREATEST(anonymous_users.last_seen, EXCLUDED.last_seen)
         `, [event.userId, event.clientTs])
+        // An attempt runs within one page load, so the build reported by the
+        // event that creates it holds for the whole attempt.
         await client.query(`
           INSERT INTO proof_attempts
-            (attempt_id, user_id, source_attempt_id, game_id, world_id, level_id, mode, started_at, initial_script)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (attempt_id, user_id, source_attempt_id, game_id, world_id, level_id, mode, started_at, initial_script,
+             attributes)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT (attempt_id) DO NOTHING
         `, [event.attemptId, event.userId, event.sourceAttemptId, event.gameId, event.worldId,
-          event.levelId, event.mode, event.clientTs, event.initialScript])
+          event.levelId, event.mode, event.clientTs, event.initialScript, buildAttributes(event.build)])
 
         if (event.eventType === 'proof_step') {
           await client.query(`
@@ -94,11 +102,12 @@ export function createDatabase(connectionString) {
       }
       await client.query(`
         INSERT INTO feedback_reports
-          (report_id, user_id, game_id, world_id, level_id, mode, message, proof_state, client_ts)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          (report_id, user_id, game_id, world_id, level_id, mode, message, proof_state, client_ts, attributes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT (report_id) DO NOTHING
       `, [feedback.reportId, feedback.userId, feedback.gameId, feedback.worldId,
-        feedback.levelId, feedback.mode, feedback.message, feedback.proofState, feedback.clientTs])
+        feedback.levelId, feedback.mode, feedback.message, feedback.proofState, feedback.clientTs,
+        buildAttributes(feedback.build)])
       await client.query('COMMIT')
     } catch (error) {
       await client.query('ROLLBACK')

@@ -112,6 +112,11 @@ jobs:
           path: visual-lean-artifact
           if-no-files-found: error
           retention-days: 30
+      - name: Record source revisions for the game build
+        id: revisions
+        run: |
+          echo "site=$(git -C lean4.js rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "client=$(git -C Lean4Game/lean4game rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry
@@ -138,6 +143,9 @@ jobs:
           context: .
           file: lean4.js/Dockerfile
           platforms: linux/amd64
+          build-args: |
+            GAME_BUILD_SITE=${{ steps.revisions.outputs.site }}
+            GAME_BUILD_CLIENT=${{ steps.revisions.outputs.client }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

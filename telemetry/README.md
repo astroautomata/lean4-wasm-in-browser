@@ -73,10 +73,20 @@ localhost origin only while developing.
 - `anonymous_users` stores a random UUID plus first/last seen times.
 - `proof_attempts` stores game/world/level/mode once, completion status, final
   scripts, and an optional link from a classic export to its Visual attempt.
-- `proof_steps` stores the ordered path. Visual steps are commands/undo;
-  classic editor steps are compact line edits (`from_line`, `removed_lines`,
+- `proof_steps` stores the ordered path. Visual steps are `command` (append
+  one step), `undo` (remove the last step) or `reset` (clear the proof; logged
+  as `undo` by clients before October 2026); classic editor steps are compact line edits (`from_line`, `removed_lines`,
   inserted `command`) rather than repeated copies of the whole proof.
 - `attributes jsonb` columns provide an extension point without schema changes.
+  `proof_attempts.attributes` and `feedback_reports.attributes` hold `build`,
+  the game build the player was running (absent for clients before October
+  2026 and for dev servers): 12-character source revisions `site` (lean4.js),
+  `client` (the lean4game client bundle), `runtime` (the lean4game GameServer
+  in the Lean WASM modules), `nng4`, `visualtest` and `lean` (the toolchain),
+  each suffixed `-dirty` when built from a modified checkout, plus `built`
+  (UTC build time). `scripts/sync-lean4game-client.mjs` records it at build
+  time and publishes the same record at `/lean4game/version.json`. Query it as,
+  for example, `attributes->'build'->>'client'`.
 - `feedback_reports` stores a player-submitted message with its game, level,
   mode, and current proof state. Its `user_id` is nullable and is populated
   only when the player has enabled anonymous telemetry.

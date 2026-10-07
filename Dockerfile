@@ -34,6 +34,12 @@ COPY visual-lean-artifact/gamedata/VisualTest/ ./Lean4Game/VisualTest/.lake/game
 WORKDIR /workspace/Lean4Game/lean4game
 RUN npm ci
 
+# Source revisions for the game build record that telemetry reports
+# (scripts/sync-lean4game-client.mjs). The build context has no .git to read
+# them from; RUN steps below see these as environment variables.
+ARG GAME_BUILD_SITE=
+ARG GAME_BUILD_CLIENT=
+
 WORKDIR /workspace/lean4.js
 RUN npm ci \
   && test -s public/visual-lean/runtime/lean.js \

@@ -18,6 +18,33 @@ test('accepts a compact classic edit', () => {
   assert.equal(result?.[0].command, 'rw [add_zero]')
 })
 
+test('distinguishes a visual reset from a single undo', () => {
+  const visual = { ...base, mode: 'visual', from_line: undefined, removed_lines: undefined }
+  assert.equal(validateBatch({ events: [{ ...visual, step_type: 'reset', command: 'reset' }] })?.[0].stepType, 'reset')
+  assert.equal(validateBatch({ events: [{ ...visual, step_type: 'undo', command: 'undo' }] })?.[0].stepType, 'undo')
+  assert.equal(validateBatch({ events: [{ ...visual, step_type: 'restart', command: 'restart' }] }), null)
+})
+
+const build = {
+  site: '3c14d15a1b2c', client: '70a363d2460d-dirty', runtime: '70a363d2460d',
+  nng4: '44a0a02f913e', visualtest: 'eec690a6a725', lean: '72a8f89f3126', built: '2026-10-05T14:00:00Z',
+}
+
+test('records the game build an event came from', () => {
+  assert.deepEqual(validateBatch({ events: [{ ...base, build }] })?.[0].build, build)
+  assert.equal(validateBatch({ events: [base] })?.[0].build, null)
+})
+
+test('keeps only well-formed build entries without losing the event', () => {
+  const result = validateBatch({ events: [{
+    ...base,
+    build: { site: '3c14d15a1b2c', client: 'main', runtime: 42, extra: 'abcdef1', built: 'yesterday' },
+  }] })
+  assert.deepEqual(result?.[0].build, { site: '3c14d15a1b2c' })
+  assert.equal(validateBatch({ events: [{ ...base, build: { client: 'main' } }] })?.[0].build, null)
+  assert.equal(validateBatch({ events: [{ ...base, build: ['3c14d15a1b2c'] }] })?.[0].build, null)
+})
+
 test('rejects invalid origins of proof paths', () => {
   assert.equal(validateBatch({ events: [{ ...base, sequence: -1 }] }), null)
   assert.equal(validateBatch({ events: [{ ...base, game_id: '../../etc' }] }), null)
@@ -41,6 +68,11 @@ test('accepts feedback without an anonymous telemetry identity', () => {
 test('accepts feedback with an anonymous identity when supplied', () => {
   const result = validateFeedback({ ...feedback, user_uuid: base.user_uuid })
   assert.equal(result?.userId, base.user_uuid)
+})
+
+test('records the game build a feedback report came from', () => {
+  assert.deepEqual(validateFeedback({ ...feedback, build })?.build, build)
+  assert.equal(validateFeedback(feedback)?.build, null)
 })
 
 test('rejects empty, oversized, or malformed feedback', () => {
