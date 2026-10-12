@@ -5,6 +5,8 @@ const EVENT_TYPES = new Set(['level_start', 'proof_step', 'level_complete'])
 const STEP_TYPES = new Set(['command', 'undo', 'reset', 'edit'])
 const BUILD_REVISION_KEYS = ['site', 'client', 'runtime', 'nng4', 'visualtest', 'lean']
 const BUILD_REVISION_RE = /^[0-9a-f]{7,40}(?:-dirty)?$/u
+const BROWSERS = new Set(['chrome', 'safari', 'firefox', 'edge', 'brave', 'samsung', 'opera', 'unknown'])
+const DEVICES = new Set(['mobile', 'desktop'])
 
 function text(value, maximum) {
   return typeof value === 'string' ? value.slice(0, maximum) : null
@@ -23,6 +25,17 @@ export function validateBuild(value) {
     build.built = value.built
   }
   return Object.keys(build).length > 0 ? build : null
+}
+
+/** The coarse platform a client reports: a browser family and whether the
+ * device is a phone/tablet or a computer. Anything outside those fixed lists
+ * is dropped, so free text such as a user-agent string is never stored. */
+export function validatePlatform(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const platform = {}
+  if (BROWSERS.has(value.browser)) platform.browser = value.browser
+  if (DEVICES.has(value.device)) platform.device = value.device
+  return Object.keys(platform).length > 0 ? platform : null
 }
 
 function safePath(value, allowSlash) {
@@ -64,6 +77,7 @@ export function validateEvent(value) {
     fromLine: value.from_line ?? null,
     removedLines: value.removed_lines ?? null,
     build: validateBuild(value.build),
+    platform: validatePlatform(value.platform),
   }
 
   if (event.eventType === 'proof_step') {
@@ -108,5 +122,6 @@ export function validateFeedback(value) {
     proofState: value.proof_state,
     clientTs: new Date(value.ts),
     build: validateBuild(value.build),
+    platform: validatePlatform(value.platform),
   }
 }

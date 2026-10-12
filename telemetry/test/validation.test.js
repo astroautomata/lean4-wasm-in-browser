@@ -45,6 +45,25 @@ test('keeps only well-formed build entries without losing the event', () => {
   assert.equal(validateBatch({ events: [{ ...base, build: ['3c14d15a1b2c'] }] })?.[0].build, null)
 })
 
+test('records the browser family and device type an event came from', () => {
+  const platform = { browser: 'safari', device: 'mobile' }
+  assert.deepEqual(validateBatch({ events: [{ ...base, platform }] })?.[0].platform, platform)
+  assert.equal(validateBatch({ events: [base] })?.[0].platform, null)
+  for (const browser of ['chrome', 'safari', 'firefox', 'edge', 'brave', 'samsung', 'opera', 'unknown']) {
+    assert.equal(validateBatch({ events: [{ ...base, platform: { browser } }] })?.[0].platform?.browser, browser)
+  }
+})
+
+test('keeps only the known platform values, never free text', () => {
+  const result = validateBatch({ events: [{
+    ...base,
+    platform: { browser: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)', device: 'desktop', model: 'iPhone 16' },
+  }] })
+  assert.deepEqual(result?.[0].platform, { device: 'desktop' })
+  assert.equal(validateBatch({ events: [{ ...base, platform: { device: 'tablet' } }] })?.[0].platform, null)
+  assert.equal(validateBatch({ events: [{ ...base, platform: 'mobile' }] })?.[0].platform, null)
+})
+
 test('rejects invalid origins of proof paths', () => {
   assert.equal(validateBatch({ events: [{ ...base, sequence: -1 }] }), null)
   assert.equal(validateBatch({ events: [{ ...base, game_id: '../../etc' }] }), null)
@@ -73,6 +92,12 @@ test('accepts feedback with an anonymous identity when supplied', () => {
 test('records the game build a feedback report came from', () => {
   assert.deepEqual(validateFeedback({ ...feedback, build })?.build, build)
   assert.equal(validateFeedback(feedback)?.build, null)
+})
+
+test('records the browser family and device type a feedback report came from', () => {
+  const platform = { browser: 'chrome', device: 'desktop' }
+  assert.deepEqual(validateFeedback({ ...feedback, platform })?.platform, platform)
+  assert.equal(validateFeedback(feedback)?.platform, null)
 })
 
 test('rejects empty, oversized, or malformed feedback', () => {

@@ -87,6 +87,12 @@ localhost origin only while developing.
   (UTC build time). `scripts/sync-lean4game-client.mjs` records it at build
   time and publishes the same record at `/lean4game/version.json`. Query it as,
   for example, `attributes->'build'->>'client'`.
+  They also hold `platform` (absent for clients before October 2026): the
+  player's `browser` family (`chrome`, `safari`, `firefox`, `edge`, `brave`,
+  `samsung`, `opera` or `unknown`) and `device` (`mobile` for phones and
+  tablets, otherwise `desktop`), classified in the browser. Values outside those lists are
+  dropped, so the user-agent string itself never reaches the database. Query it
+  as, for example, `attributes->'platform'->>'device'`.
 - `feedback_reports` stores a player-submitted message with its game, level,
   mode, and current proof state. Its `user_id` is nullable and is populated
   only when the player has enabled anonymous telemetry.
@@ -122,6 +128,7 @@ The application asks for opt-in consent. On acceptance it creates the
 first-party `lean_game_anonymous_id` cookie on the game site. The identifier is
 sent in the JSON body because third-party cookies should not be used for the
 separate collector origin. Refusal deletes the identifier and pending events.
-The collector code does not write IP addresses or user-agent strings; disable
+The collector code does not write IP addresses or user-agent strings (only the
+coarse browser family and device type above); disable
 access logging in the reverse proxy as shown if those must not be retained
 there either.
