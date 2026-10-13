@@ -1,114 +1,133 @@
 import http from 'node:http'
+import { configureServer, createApp } from './app.js'
+import { createCollectorMetrics, recordDisk, sampleProcess } from './collector-metrics.js'
+import { loadConfig } from './config.js'
 import { createDatabase } from './database.js'
-import { validateBatch, validateFeedback } from './validation.js'
+import { createDiskMonitor } from './disk.js'
+import { createHealth } from './health.js'
+import { describeError } from './http/errors.js'
+import { checkSchemaCompatibility } from './migrate.js'
+import { createWriter } from './writer.js'
 
-const port = Number(process.env.PORT || 8080)
-const databaseUrl = process.env.DATABASE_URL
-if (!databaseUrl && !process.env.PGHOST) throw new Error('DATABASE_URL or PostgreSQL PG* variables are required')
+/** Collector entry point (docs/design.md section 9).
+ *
+ * Listen first so liveness works, then check schema compatibility with the
+ * runtime writer role, retrying while the database is unreachable. An
+ * incompatible schema exits 1: the collector never migrates; the migration
+ * job does (npm run migrate). SIGTERM/SIGINT drain: unready and refusing new
+ * submissions, finish accepted work up to DRAIN_TIMEOUT_MS, then close. */
 
-const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || 'https://leangame.autumnofautumn.com')
-  .split(',').map(value => value.trim()).filter(Boolean))
-const database = createDatabase(databaseUrl)
-await database.migrate()
+const info = message => console.log(`telemetry: ${message}`)
+const warn = message => console.error(`telemetry: ${message}`)
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-const rateLimits = new Map()
-setInterval(() => {
-  const cutoff = Date.now() - 120000
-  for (const [key, value] of rateLimits) {
-    if (value.startedAt < cutoff) rateLimits.delete(key)
-  }
-}, 60000).unref()
-function rateLimited(request) {
-  const key = request.socket.remoteAddress || 'unknown'
-  const now = Date.now()
-  const current = rateLimits.get(key)
-  if (!current || now - current.startedAt >= 60000) {
-    rateLimits.set(key, { startedAt: now, count: 1 })
-    return false
-  }
-  current.count++
-  return current.count > Number(process.env.REQUESTS_PER_MINUTE || 120)
+function listen(server, port, host) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(port, host, () => {
+      server.off('error', reject)
+      resolve(server.address().port)
+    })
+  })
 }
 
-function corsHeaders(origin) {
-  return origin && allowedOrigins.has(origin) ? {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'POST, OPTIONS',
-    'access-control-allow-headers': 'content-type',
-    'access-control-max-age': '86400',
-    vary: 'Origin',
-  } : {}
-}
-
-const server = http.createServer(async (request, response) => {
-  const url = new URL(request.url || '/', 'http://localhost')
-  const origin = request.headers.origin
-  const cors = corsHeaders(origin)
-
-  if (request.method === 'GET' && url.pathname === '/healthz') {
-    response.writeHead(200, { 'content-type': 'application/json' })
-    response.end('{"status":"ok"}')
-    return
-  }
-  const isSubmissionPath = url.pathname === '/v1/events' || url.pathname === '/v1/feedback'
-  if (request.method === 'OPTIONS' && isSubmissionPath) {
-    response.writeHead(origin && allowedOrigins.has(origin) ? 204 : 403, cors)
-    response.end()
-    return
-  }
-  if (request.method !== 'POST' || !isSubmissionPath) {
-    response.writeHead(404).end()
-    return
-  }
-  if (!origin || !allowedOrigins.has(origin)) {
-    response.writeHead(403).end()
-    return
-  }
-  if (rateLimited(request)) {
-    response.writeHead(429, { ...cors, 'retry-after': '60' }).end()
-    return
-  }
-
-  let raw = ''
-  for await (const chunk of request) {
-    raw += chunk
-    if (raw.length > 512 * 1024) {
-      response.writeHead(413, cors).end()
-      request.destroy()
-      return
-    }
-  }
-  let body
-  try { body = JSON.parse(raw) } catch {}
+async function main() {
+  let config
   try {
-    if (url.pathname === '/v1/feedback') {
-      const feedback = validateFeedback(body)
-      if (!feedback) {
-        response.writeHead(400, cors).end()
-        return
-      }
-      await database.storeFeedback(feedback)
-    } else {
-      const events = validateBatch(body)
-      if (!events) {
-        response.writeHead(400, cors).end()
-        return
-      }
-      await database.store(events)
-    }
-    response.writeHead(204, cors).end()
+    config = loadConfig(process.env)
   } catch (error) {
-    console.error('Telemetry database write failed:', error instanceof Error ? error.message : error)
-    response.writeHead(500, cors).end()
+    warn(`configuration error: ${error.message}`)
+    process.exitCode = 1
+    return
   }
-})
+  for (const warning of config.warnings) warn(warning)
 
-server.listen(port, '0.0.0.0', () => console.log(`Telemetry collector listening on :${port}`))
+  const metrics = createCollectorMetrics()
+  const stopSampling = sampleProcess(metrics)
+  const database = createDatabase(config, { metrics, log: warn })
+  metrics.registry.onCollect(() => database.sample())
+  const health = createHealth({
+    intervalMs: config.readinessIntervalMs,
+    maxAgeMs: config.readinessMaxAgeMs,
+    check: () => database.checkReady(),
+    metrics,
+  })
+  database.observe({ success: () => health.recordSuccess(), failure: () => health.recordFailure() })
+  const disk = createDiskMonitor({
+    path: config.disk.probePath,
+    intervalMs: config.disk.intervalMs,
+    thresholds: { alertRatio: config.disk.alertRatio, throttleRatio: config.disk.throttleRatio, pauseRatio: config.disk.pauseRatio },
+    onSample: state => recordDisk(metrics, state),
+  })
+  const writer = createWriter({ database, config, metrics })
+  const app = createApp({ config, writer, health, metrics, disk, log: warn })
 
-async function shutdown() {
-  server.close()
-  await database.pool.end()
-  process.exit(0)
+  const server = configureServer(http.createServer({ connectionsCheckingInterval: 1000 }, app.handle), config, metrics)
+  const port = await listen(server, config.port, config.host)
+  info(`collector listening on :${port}`)
+  let metricsServer = null
+  if (config.metricsPort > 0) {
+    metricsServer = http.createServer(app.metricsHandler)
+    const metricsPort = await listen(metricsServer, config.metricsPort, config.metricsHost)
+    info(`metrics listening on :${metricsPort}`)
+  }
+  disk.start()
+  health.start()
+
+  let stopping = false
+  async function stop(reason, code) {
+    if (stopping) return
+    stopping = true
+    info(`${reason}: draining`)
+    app.startDraining()
+    health.stop()
+    disk.stop()
+    server.close()
+    server.closeIdleConnections()
+    const clean = await app.drained(config.drainTimeoutMs)
+    // Whatever is still open loses its connection; those events stay
+    // unacknowledged and the clients retry them.
+    server.closeAllConnections()
+    metricsServer?.close()
+    metricsServer?.closeAllConnections()
+    await Promise.race([database.close().catch(() => {}), sleep(3000)])
+    stopSampling()
+    info(clean ? 'drained' : 'drain deadline reached; unfinished requests were left unacknowledged')
+    process.exitCode = code
+    // Anything left (a stuck connection) must not keep the process alive.
+    setTimeout(() => process.exit(code), 1000).unref()
+  }
+
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    process.on(signal, () => {
+      if (stopping) {
+        warn(`${signal} again: exiting immediately`)
+        process.exit(1)
+      }
+      void stop(signal, 0)
+    })
+  }
+
+  let delay = 1000
+  while (!stopping) {
+    try {
+      const result = await checkSchemaCompatibility(database.pool)
+      if (result.compatible) {
+        health.setSchema('compatible')
+        info(`schema compatible${result.newer.length > 0 ? ` (newer migrations present: ${result.newer.join(', ')})` : ''}`)
+        return
+      }
+      health.setSchema('incompatible')
+      warn(`database schema is incompatible with this collector; missing: ${result.missing.join(', ') || 'none'}; ` +
+        `changed after apply: ${result.mismatched.join(', ') || 'none'}. Run the migration job before this release.`)
+      await stop('incompatible schema', 1)
+      return
+    } catch (error) {
+      warn(`schema check failed (${describeError(error)}); retrying in ${delay} ms`)
+      await sleep(delay)
+      delay = Math.min(delay * 2, 30000)
+    }
+  }
 }
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+
+await main()
