@@ -1,0 +1,10 @@
+{
+  "name": "reconnect-storm",
+  "description": "Plan phase 8.2: many clients come back online at once and flush queued backlogs within seconds (e.g. a classroom network recovering), on top of nominal load.",
+  "protocol": "v2", "batch": "client", "players": 5000, "concurrency": 1024,
+  "phases": [
+    { "name": "nominal", "duration_s": 60, "events_per_second": 100 },
+    { "name": "storm", "duration_s": 60, "events_per_second": 100, "storm": { "clients": 2000, "backlog_events": 20, "within_s": 5 } },
+    { "name": "after", "duration_s": 60, "events_per_second": 100 }
+  ]
+}

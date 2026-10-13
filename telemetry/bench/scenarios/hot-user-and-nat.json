@@ -1,0 +1,6 @@
+{
+  "name": "hot-user-and-nat",
+  "description": "Plan phase 8.2: all traffic from one source address (a NAT cohort: the load machine) with 30 % from a single hot pseudonymous user. Expect the hot user to be limited by its per-user budget while the cohort as a whole is served.",
+  "protocol": "v2", "batch": "client", "players": 300, "concurrency": 256, "hot_user_fraction": 0.3,
+  "phases": [{ "name": "cohort", "duration_s": 180, "events_per_second": 150 }]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "ramp-single-event",
+  "description": "Plan phase 8.1: the same ramp with one event per request (players acting in isolation), the worst case for request overhead.",
+  "protocol": "v2", "batch": "single", "players": 20000, "concurrency": 512,
+  "phases": [
+    { "name": "10/s", "duration_s": 120, "events_per_second": 10 },
+    { "name": "100/s", "duration_s": 300, "events_per_second": 100 },
+    { "name": "250/s", "duration_s": 300, "events_per_second": 250 },
+    { "name": "500/s", "duration_s": 300, "events_per_second": 500 },
+    { "name": "1000/s", "duration_s": 300, "events_per_second": 1000 },
+    { "name": "2000/s", "duration_s": 300, "events_per_second": 2000 }
+  ]
+}

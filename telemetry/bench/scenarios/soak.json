@@ -1,0 +1,6 @@
+{
+  "name": "soak",
+  "description": "Plan phase 8.4: the proposed nominal rate for hours, through autovacuum, compaction, a backup and an export started during the run. Set the rate to the proposed nominal value and run long enough for a full maintenance cycle.",
+  "protocol": "v2", "batch": "client", "players": 20000, "concurrency": 512, "feedback_per_1000_events": 0.5,
+  "phases": [{ "name": "soak", "duration_s": 14400, "events_per_second": 200 }]
+}

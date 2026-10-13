@@ -1,0 +1,14 @@
+{
+  "name": "ramp-client-batching",
+  "description": "Plan phase 8.1: 10/100/250/500/1000/2000 events/s with the browser scheduler's realistic batch sizes. Stop the run (Ctrl-C) as soon as a step is unsafe: sustained 5xx, growing latency, host pressure.",
+  "protocol": "v2", "batch": "client", "players": 20000, "concurrency": 512,
+  "feedback_per_1000_events": 0.5,
+  "phases": [
+    { "name": "10/s", "duration_s": 120, "events_per_second": 10 },
+    { "name": "100/s", "duration_s": 300, "events_per_second": 100 },
+    { "name": "250/s", "duration_s": 300, "events_per_second": 250 },
+    { "name": "500/s", "duration_s": 300, "events_per_second": 500 },
+    { "name": "1000/s", "duration_s": 300, "events_per_second": 1000 },
+    { "name": "2000/s", "duration_s": 300, "events_per_second": 2000 }
+  ]
+}

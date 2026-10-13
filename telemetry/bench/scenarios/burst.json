@@ -1,0 +1,10 @@
+{
+  "name": "burst",
+  "description": "Plan phase 8.5: nominal load, a short burst at 3x (edit to 2x-5x the proposed nominal rate), then recovery. Expect controlled 429/503 with Retry-After during the burst, no 500s, no crash, and recovery to nominal latency.",
+  "protocol": "v2", "batch": "client", "players": 20000, "concurrency": 1024,
+  "phases": [
+    { "name": "nominal", "duration_s": 120, "events_per_second": 200 },
+    { "name": "burst 3x", "duration_s": 60, "events_per_second": 600 },
+    { "name": "recovery", "duration_s": 180, "events_per_second": 200 }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "faults",
+  "description": "Plan phase 8.2: duplicate resends (expect duplicate), conflicting id reuse (expect rejected, never accepted), overlarge bodies (413), trickled bodies slower than the body deadline (408), truncated uploads (no acknowledgement), at moderate load.",
+  "protocol": "v2", "batch": "client", "players": 2000, "concurrency": 256, "slow_body_ms": 12000,
+  "faults": { "duplicate_resend": 0.05, "id_conflict": 0.02, "oversize": 0.01, "slow_body": 0.01, "truncated": 0.01 },
+  "phases": [{ "name": "faults", "duration_s": 300, "events_per_second": 100 }]
+}

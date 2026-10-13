@@ -1,0 +1,7 @@
+{
+  "name": "mixed-clients",
+  "description": "Plan phase 3.6/8.2: old (v1) and new (v2) clients side by side during the transition window, with a classic-editor-heavy mix.",
+  "protocol": "mixed", "batch": "client", "players": 5000, "concurrency": 256,
+  "profile_overrides": { "mode_mix": { "visual": 0.5, "classic": 0.5 } },
+  "phases": [{ "name": "mixed", "duration_s": 300, "events_per_second": 200 }]
+}

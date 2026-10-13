@@ -1,0 +1,7 @@
+{
+  "name": "smoke",
+  "description": "Harness check only: a few seconds at 10 events/s. Not a benchmark.",
+  "protocol": "v2", "batch": "client", "players": 50, "concurrency": 16,
+  "feedback_per_1000_events": 20,
+  "phases": [{ "name": "smoke", "duration_s": 5, "events_per_second": 10 }]
+}
