@@ -1,0 +1,114 @@
+# Telemetry site block for the existing Caddy (docs/operations.md, "Caddy").
+# Replace the current `telemetry.leangame.autumnofautumn.com { ... }` block of
+# the production Caddyfile with the snippet and site below. Caddy must be
+# attached to the telemetry `edge` network (see compose.yml).
+#
+# Trust chain: Browser -> Caddy -> collector. Caddy is the only public ingress
+# and the only peer whose X-Telemetry-Client-IP the collector believes
+# (TRUSTED_PROXY_CIDRS = the edge subnet, or Caddy's pinned edge address).
+# Caddy overwrites that header with {client_ip}, the TCP peer of the client
+# connection: no `trusted_proxies` is configured, so any client-supplied
+# X-Forwarded-For / Forwarded / X-Real-IP / X-Telemetry-Client-IP is ignored for
+# identity and not passed on. IPv4 and IPv6 clients are both supported; the
+# collector keys IPv6 clients by /64. For IPv6 clients to keep their own
+# address, IPv6 must reach Caddy's container natively (see docs/operations.md,
+# "IPv6"), not through Docker's userland proxy.
+#
+# If a CDN is ever put in front of Caddy, the chain gains one hop and must be
+# configured end to end: add to the global options
+#     servers {
+#         trusted_proxies static <the CDN's published edge ranges>
+#         trusted_proxies_strict
+#         client_ip_headers <the CDN's client IP header, e.g. CF-Connecting-IP>
+#     }
+# keep the ranges current, and keep the header_up below unchanged so the
+# collector still receives exactly one client IP from Caddy. Requests that
+# bypass the CDN then arrive from untrusted peers and are keyed by their real
+# address, so they cannot spoof an identity.
+
+# Global options: merge into the global options block at the very top of the
+# production Caddyfile (it has none today). Caddy logs proxy errors (for
+# example while the collector restarts) with the client's address and request
+# headers; this keeps those entries, minus every address and header, so no IP
+# address is retained for the telemetry site.
+{
+	log telemetry_errors {
+		include http.log.error.telemetry
+		output stderr
+		format filter {
+			wrap json
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>client_ip delete
+				request>headers delete
+			}
+		}
+	}
+	log default {
+		exclude http.log.error.telemetry
+	}
+}
+
+(telemetry_upstream) {
+	# Overwrites (never appends to) whatever the client sent.
+	header_up X-Telemetry-Client-IP {client_ip}
+	# The collector does not use these; do not forward client-chosen values or
+	# extra copies of the client's address.
+	header_up -X-Forwarded-For
+	header_up -X-Forwarded-Host
+	header_up -X-Forwarded-Proto
+	header_up -Forwarded
+	header_up -X-Real-IP
+	transport http {
+		dial_timeout 2s
+		# Above the collector's REQUEST_TIMEOUT_MS (15 s).
+		response_header_timeout 20s
+		# Idle upstream connections close after 30 s, before the collector's
+		# KEEP_ALIVE_TIMEOUT_MS (60 s), so Caddy never reuses a socket the
+		# collector is closing.
+		keepalive 30s
+		keepalive_idle_conns 32
+	}
+}
+
+telemetry.leangame.autumnofautumn.com {
+	# No access log: the collector does not retain IP addresses and neither
+	# should the proxy in front of it. The name ties this site's error entries
+	# to the filtered logger above.
+	log telemetry {
+		output discard
+	}
+
+	@intake {
+		method POST OPTIONS
+		path /v1/events /v1/feedback /v2/events
+	}
+	@health {
+		method GET HEAD
+		path /healthz /readyz
+	}
+
+	handle @intake {
+		# Backstop slightly above the collector's MAX_BODY_BYTES (512 KiB),
+		# which answers 413 itself; Caddy stops anything far larger early.
+		request_body {
+			max_size 528KiB
+		}
+		reverse_proxy collector:8080 {
+			import telemetry_upstream
+		}
+	}
+
+	# Liveness and readiness for the external uptime check. Metrics stay on
+	# the private port and are never proxied.
+	handle @health {
+		reverse_proxy collector:8080 {
+			import telemetry_upstream
+		}
+	}
+
+	handle {
+		respond 404
+	}
+}

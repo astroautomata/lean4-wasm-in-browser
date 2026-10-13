@@ -1,88 +1,288 @@
 name: Telemetry collector release
 
+# Builds and tests one immutable collector image per commit. Images are pushed
+# only as ghcr.io/<repo>-telemetry:sha-<full commit> (plus the git tag name for
+# v* tags). There is deliberately no `latest`: nothing auto-updates production.
+# Deploying means setting COLLECTOR_IMAGE to the tag and digest printed in the
+# run summary (telemetry/docs/operations.md, "Releases").
+
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - telemetry/**
+      - .github/workflows/telemetry-release.yml
   push:
     branches: [main]
+    tags: ["v*"]
     paths:
       - telemetry/**
       - .github/workflows/telemetry-release.yml
 
 permissions:
   contents: read
-  packages: write
+
+concurrency:
+  group: telemetry-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: 22.23.2
+  POSTGRES_IMAGE: postgres:17.10-alpine3.24
+  # Pinned by digest: the scanner runs with access to the built image.
+  TRIVY_IMAGE: aquasec/trivy:0.71.0@sha256:016eae51fdcf989332a5404af7e8f625cd5d95d7c0907a221d080a996f556500
+  ORIGIN: https://leangame.autumnofautumn.com
 
 jobs:
-  test-and-publish:
-    runs-on: ubuntu-latest
+  test:
+    name: Tests, audit and collector smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17.10-alpine3.24
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: telemetry
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:ci-only-password@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: telemetry/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Dependency advisories (runtime dependencies, fail on high)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Unit tests
+        run: npm test
+      - name: Integration tests (PostgreSQL)
+        run: npm run test:integration
+      - name: Python tests
+        run: npm run test:python
+      - name: Migrate, provision roles and verify effective permissions
+        run: |
+          set -euo pipefail
+          secrets="$RUNNER_TEMP/secrets"
+          install -d -m 0700 "$secrets"
+          for role in writer compactor reader retention backup; do
+            password=$(openssl rand -hex 24)
+            echo "::add-mask::$password"
+            printf '%s\n' "$password" > "$secrets/telemetry_${role}_password"
+          done
+          node --input-type=module -e "
+            import pg from 'pg'
+            const client = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL })
+            await client.connect()
+            await client.query('DROP DATABASE IF EXISTS lean_telemetry WITH (FORCE)')
+            await client.query('CREATE DATABASE lean_telemetry')
+            await client.end()"
+          export MIGRATION_DATABASE_URL=postgresql://postgres:ci-only-password@127.0.0.1:5432/lean_telemetry
+          for role in WRITER COMPACTOR READER RETENTION BACKUP; do
+            lower=${role,,}
+            export "TELEMETRY_${role}_PASSWORD_FILE=$secrets/telemetry_${lower}_password"
+          done
+          node src/migrate.js --provision-roles
+          node src/migrate.js --check
+          export PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=lean_telemetry
+          for role in WRITER COMPACTOR READER RETENTION BACKUP; do
+            lower=${role,,}
+            export "${role}_PGPASSWORD_FILE=$secrets/telemetry_${lower}_password"
+          done
+          node tools/verify-permissions.js
+      - name: Boot the collector as telemetry_writer and smoke-test v1, v2 and feedback
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGDATABASE: lean_telemetry
+          PGUSER: telemetry_writer
+          ALLOWED_ORIGINS: ${{ env.ORIGIN }}
+          PORT: "8090"
+          METRICS_PORT: "9464"
+          METRICS_HOST: 127.0.0.1
+        run: |
+          set -euo pipefail
+          export PGPASSWORD_FILE="$RUNNER_TEMP/secrets/telemetry_writer_password"
+          node src/server.js > "$RUNNER_TEMP/collector.log" 2>&1 &
+          pid=$!
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:8090/readyz >/dev/null && break
+            if [[ $attempt == 30 ]]; then cat "$RUNNER_TEMP/collector.log"; exit 1; fi
+            sleep 1
+          done
+          ops/smoke-test.sh http://127.0.0.1:8090 --write --origin "$ORIGIN" --metrics http://127.0.0.1:9464/metrics
+          # The events are durable: read them back as the read-only role.
+          READER_PGPASSWORD="$(cat "$RUNNER_TEMP/secrets/telemetry_reader_password")" node --input-type=module -e "
+            import pg from 'pg'
+            const client = new pg.Client({ user: 'telemetry_reader', password: process.env.READER_PGPASSWORD })
+            await client.connect()
+            const { rows: [row] } = await client.query(
+              \"SELECT (SELECT count(*)::int FROM proof_steps) AS steps, (SELECT count(*)::int FROM feedback_reports) AS feedback, \" +
+              \"(SELECT attributes->'platform' FROM proof_attempts LIMIT 1) AS attempt_platform, \" +
+              \"(SELECT attributes->'platform' FROM feedback_reports LIMIT 1) AS feedback_platform\")
+            await client.end()
+            // The attempt keeps the platform of the event that created it.
+            // (Compared field by field: jsonb reorders object keys.)
+            if (row.steps !== 2 || row.feedback !== 1 ||
+                row.attempt_platform?.browser !== 'chrome' || row.attempt_platform?.device !== 'desktop' ||
+                row.feedback_platform?.browser !== 'firefox' || row.feedback_platform?.device !== 'mobile') {
+              console.error(JSON.stringify(row))
+              process.exit(1)
+            }"
+          # SIGTERM drains and exits 0 well within the 30 s stop grace period.
+          kill -TERM "$pid"
+          timeout 30 tail --pid="$pid" -f /dev/null
+          wait "$pid" || { status=$?; cat "$RUNNER_TEMP/collector.log"; exit "$status"; }
+          if grep -Eq '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$RUNNER_TEMP/collector.log"; then
+            echo '::error::the collector log contains a UUID'
+            exit 1
+          fi
+
+  image:
+    name: Build, scan and publish the immutable image
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    services:
+      postgres:
+        image: postgres:17.10-alpine3.24
         env:
           POSTGRES_DB: lean_telemetry
           POSTGRES_USER: lean_telemetry
-          POSTGRES_PASSWORD: integration-test-password
+          POSTGRES_PASSWORD: ci-only-password
         ports:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U lean_telemetry -d lean_telemetry"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 20
+    env:
+      LOCAL_IMAGE: telemetry-collector:ci
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Image tags (immutable only)
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: telemetry/package-lock.json
-      - name: Test collector
-        working-directory: telemetry
-        run: npm ci && npm test
-      - name: Test migrations and event storage against PostgreSQL
-        working-directory: telemetry
-        env:
-          PGHOST: 127.0.0.1
-          PGPORT: 5432
-          PGDATABASE: lean_telemetry
-          PGUSER: lean_telemetry
-          PGPASSWORD: integration-test-password
-          ALLOWED_ORIGINS: https://leangame.autumnofautumn.com
-          PORT: 8090
+          images: ghcr.io/${{ github.repository }}-telemetry
+          flavor: |
+            latest=false
+          tags: |
+            type=sha,prefix=sha-,format=long
+            type=ref,event=tag
+          labels: |
+            org.opencontainers.image.title=Lean game telemetry collector
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: telemetry
+          load: true
+          push: false
+          tags: ${{ env.LOCAL_IMAGE }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=telemetry
+          cache-to: type=gha,scope=telemetry,mode=max
+      - name: Smoke-test the image as deployed (read-only, unprivileged, writer role)
         run: |
           set -euo pipefail
-          node src/server.js &
-          server_pid=$!
-          trap 'kill "$server_pid"' EXIT
-          for attempt in $(seq 1 20); do
-            curl --fail --silent http://127.0.0.1:8090/healthz >/dev/null && break
-            sleep 1
+          secrets="$RUNNER_TEMP/secrets"
+          install -d -m 0755 "$secrets"
+          printf 'ci-only-password\n' > "$secrets/postgres_password"
+          for role in writer compactor reader retention backup; do
+            password=$(openssl rand -hex 24)
+            echo "::add-mask::$password"
+            printf '%s\n' "$password" > "$secrets/telemetry_${role}_password"
           done
-          curl --fail --silent --output /dev/null \
-            --header 'Origin: https://leangame.autumnofautumn.com' \
-            --header 'Content-Type: application/json' \
-            --data '{"events":[{"event_id":"d707e185-136e-4f54-bca8-e1aaffbbe396","user_uuid":"a4ac71f1-54c6-40df-89f7-b5062bf71d60","attempt_uuid":"505300ff-0847-48eb-994b-7e834f938c4e","event_type":"proof_step","game_id":"g/local/NNG4","world_id":"Tutorial","level_id":2,"mode":"visual","sequence":1,"elapsed_ms":1234,"ts":"2026-08-04T12:00:00.000Z","step_type":"command","command":"rw [add_zero]","platform":{"browser":"chrome","device":"desktop"}}]}' \
-            http://127.0.0.1:8090/v1/events
-          node --input-type=module -e "import pg from 'pg'; const p=new pg.Pool(); const r=await p.query('select count(*)::int as count from proof_steps'); if(r.rows[0].count!==1) process.exit(1); const a=await p.query('select attributes->\'platform\'->>\'browser\' as browser, attributes->\'platform\'->>\'device\' as device from proof_attempts'); if(a.rows[0].browser!=='chrome'||a.rows[0].device!=='desktop') process.exit(1); await p.end()"
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+          chmod 0444 "$secrets"/*
+          hardening=(--network host --read-only --tmpfs /tmp:size=16m --cap-drop ALL
+            --security-opt no-new-privileges --user 1000:1000 --memory 640m --pids-limit 128
+            -v "$secrets:/run/secrets:ro" -e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGDATABASE=lean_telemetry)
+          docker run --rm "${hardening[@]}" \
+            -e MIGRATION_PGUSER=lean_telemetry -e MIGRATION_PGPASSWORD_FILE=/run/secrets/postgres_password \
+            -e TELEMETRY_WRITER_PASSWORD_FILE=/run/secrets/telemetry_writer_password \
+            -e TELEMETRY_COMPACTOR_PASSWORD_FILE=/run/secrets/telemetry_compactor_password \
+            -e TELEMETRY_READER_PASSWORD_FILE=/run/secrets/telemetry_reader_password \
+            -e TELEMETRY_RETENTION_PASSWORD_FILE=/run/secrets/telemetry_retention_password \
+            -e TELEMETRY_BACKUP_PASSWORD_FILE=/run/secrets/telemetry_backup_password \
+            "$LOCAL_IMAGE" node src/migrate.js --provision-roles
+          docker run --rm "${hardening[@]}" \
+            -e WRITER_PGPASSWORD_FILE=/run/secrets/telemetry_writer_password \
+            -e COMPACTOR_PGPASSWORD_FILE=/run/secrets/telemetry_compactor_password \
+            -e READER_PGPASSWORD_FILE=/run/secrets/telemetry_reader_password \
+            -e RETENTION_PGPASSWORD_FILE=/run/secrets/telemetry_retention_password \
+            -e BACKUP_PGPASSWORD_FILE=/run/secrets/telemetry_backup_password \
+            "$LOCAL_IMAGE" node tools/verify-permissions.js
+          docker run -d --name collector "${hardening[@]}" --init \
+            -e PGUSER=telemetry_writer -e PGPASSWORD_FILE=/run/secrets/telemetry_writer_password \
+            -e PORT=8090 -e METRICS_PORT=9464 -e METRICS_HOST=127.0.0.1 -e ALLOWED_ORIGINS="$ORIGIN" \
+            "$LOCAL_IMAGE"
+          for attempt in $(seq 1 30); do
+            [[ $(docker inspect --format '{{.State.Health.Status}}' collector) == healthy ]] && break
+            if [[ $attempt == 30 ]]; then docker logs collector; exit 1; fi
+            sleep 2
+          done
+          telemetry/ops/smoke-test.sh http://127.0.0.1:8090 --write --origin "$ORIGIN" --metrics http://127.0.0.1:9464/metrics
+          docker stop --time 30 collector
+          [[ $(docker inspect --format '{{.State.ExitCode}}' collector) == 0 ]] || { docker logs collector; exit 1; }
+      - name: Vulnerability scan (fail on fixable high/critical)
+        run: |
+          set -euo pipefail
+          docker save "$LOCAL_IMAGE" -o "$RUNNER_TEMP/image.tar"
+          docker run --rm -v "$RUNNER_TEMP/image.tar:/image.tar:ro" "$TRIVY_IMAGE" image \
+            --input /image.tar --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 1 --no-progress
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@v5
-        id: meta
-        with:
-          images: ghcr.io/${{ github.repository }}-telemetry
-          tags: |
-            type=raw,value=latest
-            type=sha,prefix=sha-
-      - uses: docker/build-push-action@v6
+      - name: Publish
+        id: publish
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
         with:
           context: telemetry
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=telemetry
-          cache-to: type=gha,scope=telemetry,mode=max
           provenance: true
+      - name: Release summary
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.publish.outputs.digest }}
+          IMAGE: ghcr.io/${{ github.repository }}-telemetry:sha-${{ github.sha }}
+        run: |
+          {
+            echo '### Telemetry collector image'
+            echo
+            echo 'Deploy by setting in telemetry/.env:'
+            echo
+            echo '```'
+            echo "COLLECTOR_IMAGE=${IMAGE,,}@${DIGEST}"
+            echo '```'
+            echo
+            echo 'Then follow telemetry/docs/operations.md, "Releases": migrate, verify permissions, canary, switch.'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,108 +1,115 @@
 # Lean game telemetry collector
 
-This is the optional, separately hosted collector for the static GitHub Pages
-game. It stores pseudonymous level attempts and ordered proof paths in
-PostgreSQL. It does not execute Lean and is not part of proof validation.
+The optional, separately hosted collector for the static game. Browsers run
+Lean locally and, with the player's consent, send pseudonymous level attempts
+and ordered proof actions; the collector validates them, admits them within
+fixed bounds and stores them in PostgreSQL, acknowledging an event only after
+it is committed. It does not execute Lean and is not part of proof
+validation. A separate worker compresses complete trajectories losslessly.
 
-## Deploy with PostgreSQL
-
-1. Point `telemetry.leangame.autumnofautumn.com` at the telemetry server.
-2. Copy this directory's `.env.example` to `.env` and replace the database
-   password with a long random value. Do not commit `.env`.
-3. Run `docker compose -f compose.yml pull` and then
-   `docker compose -f compose.yml up -d`.
-   The included Watchtower service checks every five minutes by default and
-   replaces the collector when a new `latest` image is published. Only the
-   collector opts in; Watchtower does not update PostgreSQL. Adjust
-   `WATCHTOWER_POLL_INTERVAL` in `.env` if desired.
-4. Reverse proxy HTTPS to `127.0.0.1:8090` when Caddy runs on the host. For
-   Caddy:
-
-   ```caddyfile
-   telemetry.leangame.autumnofautumn.com {
-       reverse_proxy 127.0.0.1:8090
-       log {
-           output discard
-       }
-   }
-   ```
-
-   In your existing setup Caddy itself runs in Docker. The cleaner arrangement
-   is to copy the `postgres` and `collector` services and the
-   `telemetry_postgres` volume into that same Compose file, remove the
-   collector's `ports` block, and proxy over the shared Compose network:
-
-   ```caddyfile
-   telemetry.leangame.autumnofautumn.com {
-       reverse_proxy collector:8080
-       log {
-           output discard
-       }
-   }
-   ```
-
-5. Verify `https://telemetry.leangame.autumnofautumn.com/healthz` returns
-   `{"status":"ok"}`.
-
-Watchtower needs the Docker socket in order to replace the collector, which
-effectively gives that container administrative control over Docker on the
-host. The Compose file pins Watchtower to `1.7.1` and opts in only the
-collector. Note that the upstream Watchtower project was archived in December
-2025; keep the pin explicit and revisit this updater if Docker compatibility
-changes.
-
-Check updater activity with:
-
-```sh
-docker compose -f compose.yml logs --tail=100 watchtower
+```
+Browser ──> Caddy (TLS, sole ingress, client IP header) ──> collector ──> PostgreSQL
+                                                                 ▲            ▲
+                                       private metrics :9464 ────┘   compactor, exports,
+                                                                     retention, backups
 ```
 
-The collector applies its idempotent migration automatically at startup. It
-accepts either `DATABASE_URL` or the standard PostgreSQL `PGHOST`, `PGUSER`,
-`PGPASSWORD`, `PGDATABASE`, and `PGPORT` variables. The
-database is not exposed outside Docker. Back up the `telemetry_postgres` volume
-with your normal PostgreSQL backup process (`pg_dump` is sufficient).
+## Documentation
+
+| Topic | Document |
+| --- | --- |
+| Engineering contract: modules, configuration, semantics | [docs/design.md](docs/design.md) |
+| Client-facing HTTP protocol (v1, v2, feedback) | [docs/protocol.md](docs/protocol.md) |
+| Event identity, duplicates and the replay contract | [docs/replay-contract.md](docs/replay-contract.md) |
+| Compressed trajectory format and compaction | [docs/trajectory-format.md](docs/trajectory-format.md), [docs/compaction.md](docs/compaction.md) |
+| Exports and replay extraction | [docs/exports.md](docs/exports.md) |
+| Benchmark and capacity | [docs/benchmark.md](docs/benchmark.md), [docs/capacity.md](docs/capacity.md) |
+| **Deployment, releases, monitoring, backups, restores** | [docs/operations.md](docs/operations.md) |
+| What the remediation implemented and what remains | [docs/remediation-status.md](docs/remediation-status.md) |
+
+## Development
+
+Node 22, PostgreSQL 17 for integration tests, Python 3.12 for the replay tools.
+
+```sh
+npm ci
+npm test                                   # unit tests, no database
+docker run -d --rm --name tlm-dev-pg -e POSTGRES_PASSWORD=test -p 127.0.0.1:55432:5432 postgres:17.10-alpine3.24
+TEST_DATABASE_URL=postgresql://postgres:test@127.0.0.1:55432/postgres npm run test:integration
+npm run test:python
+```
+
+Integration tests create and drop their own databases on the disposable
+cluster in `TEST_DATABASE_URL`; never point them at a real deployment. The
+backup/restore tests also need Docker.
+
+## Deployment in brief
+
+[`compose.yml`](compose.yml) is the steady-state stack: pinned PostgreSQL, the
+collector from an immutable release image (`COLLECTOR_IMAGE`, a `sha-<commit>`
+tag and digest built by
+[`.github/workflows/telemetry-release.yml`](../.github/workflows/telemetry-release.yml)),
+an explicit `migrate` release job that alone holds the bootstrap credential,
+and least-privilege roles for the collector, compactor, exports, retention and
+backups. Containers are unprivileged with read-only root filesystems, resource
+limits and rotated logs; nothing publishes a port, and nothing updates itself
+(no Watchtower, no Docker socket). Caddy reaches the collector over a private
+edge network ([`ops/Caddyfile.example`](ops/Caddyfile.example)).
+
+```sh
+cp .env.example .env                  # COLLECTOR_IMAGE, POSTGRES_VOLUME, ...
+# create secrets/ as described in secrets/README.md
+docker compose up -d --wait postgres
+docker compose run --rm migrate       # migrations + role passwords (release step)
+docker compose run --rm verify-permissions
+docker compose up -d --wait collector
+```
+
+The full procedures, including the step-by-step migration of the existing
+deployment, canary releases, rollback, disk watermarks, backups
+([`ops/backup.sh`](ops/backup.sh)) and restore drills
+([`ops/restore-test.sh`](ops/restore-test.sh)), are in
+[docs/operations.md](docs/operations.md). Post-deploy checks:
+`ops/smoke-test.sh https://telemetry.leangame.autumnofautumn.com` (read-only).
 
 For a different collector URL, build the website with
-`VITE_TELEMETRY_URL=https://your-collector.example`. Set `ALLOWED_ORIGINS` to
-the exact comma-separated site origins allowed to submit events; include a
-localhost origin only while developing.
+`VITE_TELEMETRY_URL=https://your-collector.example` and set `ALLOWED_ORIGINS`
+to the exact site origins allowed to submit events.
 
 ## Data model
 
-- `anonymous_users` stores a random UUID plus first/last seen times.
-- `proof_attempts` stores game/world/level/mode once, completion status, final
-  scripts, and an optional link from a classic export to its Visual attempt.
-- `proof_steps` stores the ordered path. Visual steps are `command` (append
-  one step), `undo` (remove the last step) or `reset` (clear the proof; logged
-  as `undo` by clients before October 2026); classic editor steps are compact line edits (`from_line`, `removed_lines`,
-  inserted `command`) rather than repeated copies of the whole proof.
-- `attributes jsonb` columns provide an extension point without schema changes.
-  `proof_attempts.attributes` and `feedback_reports.attributes` hold `build`,
-  the game build the player was running (absent for clients before October
-  2026 and for dev servers): 12-character source revisions `site` (lean4.js),
-  `client` (the lean4game client bundle), `runtime` (the lean4game GameServer
-  in the Lean WASM modules), `nng4`, `visualtest` and `lean` (the toolchain),
-  each suffixed `-dirty` when built from a modified checkout, plus `built`
-  (UTC build time). `scripts/sync-lean4game-client.mjs` records it at build
-  time and publishes the same record at `/lean4game/version.json`. Query it as,
-  for example, `attributes->'build'->>'client'`.
-  They also hold `platform` (absent for clients before October 2026): the
-  player's `browser` family (`chrome`, `safari`, `firefox`, `edge`, `brave`,
-  `samsung`, `opera` or `unknown`) and `device` (`mobile` for phones and
-  tablets, otherwise `desktop`), classified in the browser. Values outside those lists are
-  dropped, so the user-agent string itself never reaches the database. Query it
-  as, for example, `attributes->'platform'->>'device'`.
-- `feedback_reports` stores a player-submitted message with its game, level,
-  mode, and current proof state. Its `user_id` is nullable and is populated
-  only when the player has enabled anonymous telemetry.
+- `anonymous_users`: a random UUID plus first/last seen times.
+- `proof_attempts`: game/world/level/mode once per attempt, start and
+  completion identity, final scripts, completion status, trusted ingestion
+  times, an optional link from a classic export to its visual attempt, and
+  the `attributes` below.
+- `proof_steps`: recent proof actions as rows. Visual steps are `command`,
+  `undo` or `reset`; classic editor steps are line edits (`from_line`,
+  `removed_lines`, inserted `command`).
+- `trajectory_chunks`: compressed, versioned, verified chunks of older actions
+  ([trajectory-format.md](docs/trajectory-format.md)). After compaction in
+  `replace` mode an attempt's actions live partly in chunks, so read paths
+  through `src/trajectory/reader.js`, `tools/export.js` or
+  `extract-replays.py`, not `proof_steps` alone.
+- `feedback_reports`: player-submitted messages with their game, level, mode,
+  proof state and `attributes`; `user_id` only when telemetry is enabled.
+- `attributes` (attempts and feedback) holds, each when the client reported it,
+  `build`: the game build the player ran (source revisions `site`, `client`,
+  `runtime`, `nng4`, `visualtest`, `lean`, each suffixed `-dirty` when built
+  from a modified checkout, and the UTC build time `built`; recorded by
+  `scripts/sync-lean4game-client.mjs` and published at
+  `/lean4game/version.json`), and `platform`: the player's `browser` family
+  (`chrome`, `safari`, `firefox`, `edge`, `brave`, `samsung`, `opera` or
+  `unknown`) and `device` (`mobile` for phones and tablets, otherwise
+  `desktop`), classified in the browser. Values outside those lists are
+  dropped, so a user-agent string never reaches the database. Both are absent
+  for clients before October 2026 and are not part of an event's identity. An
+  attempt keeps those of the event that created it. Query them as, for
+  example, `attributes->'build'->>'client'` or
+  `attributes->'platform'->>'device'`.
+- `schema_migrations`: the migration ledger with checksums.
 
-PostgreSQL automatically TOAST-compresses larger scripts. Normalization avoids
-repeating UUID and level strings for every step, and PostgreSQL enums encode
-the repeated mode/action labels in four bytes. Idempotent event UUIDs and
-`(attempt_id, sequence)` uniqueness make browser retries safe.
-
-Example completion report:
+Example completion report (summaries stay relational):
 
 ```sql
 SELECT game_id, world_id, level_id, mode,
@@ -115,20 +122,15 @@ GROUP BY game_id, world_id, level_id, mode
 ORDER BY game_id, world_id, level_id, mode;
 ```
 
-Example reconstructed path input:
-
-```sql
-SELECT sequence, elapsed_ms, step_type, command, from_line, removed_lines
-FROM proof_steps
-WHERE attempt_id = '00000000-0000-0000-0000-000000000000'
-ORDER BY sequence;
-```
+## Privacy
 
 The application asks for opt-in consent. On acceptance it creates the
-first-party `lean_game_anonymous_id` cookie on the game site. The identifier is
-sent in the JSON body because third-party cookies should not be used for the
-separate collector origin. Refusal deletes the identifier and pending events.
-The collector code does not write IP addresses or user-agent strings (only the
-coarse browser family and device type above); disable
-access logging in the reverse proxy as shown if those must not be retained
-there either.
+first-party `lean_game_anonymous_id` cookie on the game site and sends the
+identifier in the JSON body. Refusal deletes the identifier and pending
+events. The collector does not store IP addresses or user-agent strings (only the
+coarse browser family and device type above); it uses the client address only
+in memory for rate limiting. Caddy keeps no access log for
+the telemetry site and strips addresses from its error log entries. Logs and
+metrics never contain proof text, feedback, identifiers or addresses. Proof
+scripts and feedback can still contain sensitive text, so exports, archives
+and backups are private and encrypted.

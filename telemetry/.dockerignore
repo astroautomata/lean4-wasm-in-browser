@@ -1,3 +1,11 @@
-node_modules
-test
-npm-debug.log
+# Allow-list: only what the release image needs reaches the build context, so
+# secrets/, .env, exports, backups, bench/ and test data can never leak into it.
+*
+!package.json
+!package-lock.json
+!migrations/*.sql
+!src/**
+!tools/*.js
+!tools/*.py
+# Archives embed the format specification and the reference decoder.
+!docs/trajectory-format.md

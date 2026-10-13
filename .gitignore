@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 /telemetry/.env
+# Telemetry deployment secrets and data (telemetry/docs/operations.md)
+/telemetry/secrets/*
+!/telemetry/secrets/README.md
+/telemetry/exports/
+/telemetry/backups/
+/telemetry/archive/
 
 # Editor directories and files
 .vscode/*
@@ -29,3 +35,4 @@ dist-ssr
 /public/visual-lean
 tests/.artifacts/
 test-results/
+__pycache__/

@@ -1,49 +1,437 @@
+# Telemetry collector stack: steady-state deployment (docs/operations.md).
+#
+#   postgres    PostgreSQL 17, private network only
+#   migrate     one-shot release job (profile "migrate"): applies migrations and
+#               enables the runtime roles; the ONLY holder of the bootstrap
+#               (superuser) credential besides the database itself
+#   collector   public intake behind Caddy, runtime writer credential only
+#   compactor   trajectory compaction worker (profile "compactor")
+#   exporter, retention, verify-permissions
+#               operator tools (profile "tools"), each with its own role
+#
+# Every application container runs the same immutable release image
+# (COLLECTOR_IMAGE). Nothing here updates itself: there is no Watchtower and no
+# Docker socket. Releases change COLLECTOR_IMAGE deliberately.
+#
+# Secrets are files under TELEMETRY_SECRETS_DIR (default ./secrets, gitignored),
+# owned by root, group TELEMETRY_SECRETS_GID, mode 0440. Compose bind-mounts
+# them as they are (it ignores uid/mode for file secrets), so every consumer
+# joins that group; each container only sees the secrets listed for it.
+#
+# No ports are published. Caddy reaches the collector over the `edge` network
+# (fixed subnet, so TRUSTED_PROXY_CIDRS can name it); PostgreSQL, the metrics
+# port and the jobs live on the internal `db` network.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+# Hardening shared by the Node services (collector, jobs, tools).
+x-app: &app
+  image: ${COLLECTOR_IMAGE:?set COLLECTOR_IMAGE to an immutable release image, e.g. ghcr.io/OWNER/REPO-telemetry:sha-<commit>}
+  user: "1000:1000"
+  group_add: ["${TELEMETRY_SECRETS_GID:-10001}"]
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=16m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging: *logging
+  networks: [db]
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+# Shared, non-secret database location for every role.
+x-database: &database
+  PGHOST: postgres
+  PGPORT: "5432"
+  PGDATABASE: ${POSTGRES_DB:-lean_telemetry}
+
 services:
   postgres:
-    image: postgres:17-alpine
+    image: ${POSTGRES_IMAGE:-postgres:17.10-alpine3.24}
     restart: unless-stopped
+    # The alpine image's postgres user. Running as it directly (instead of the
+    # entrypoint dropping privileges) lets every capability be dropped; the data
+    # directory of an existing volume is already owned by uid 70.
+    user: "70:70"
+    group_add: ["${TELEMETRY_SECRETS_GID:-10001}"]
+    read_only: true
+    tmpfs:
+      - /var/run/postgresql:uid=70,gid=70,mode=0775,size=1m
+      - /tmp:uid=70,gid=70,mode=1777,size=64m
+    shm_size: ${POSTGRES_SHM_SIZE:-256m}
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     environment:
-      POSTGRES_DB: lean_telemetry
-      POSTGRES_USER: lean_telemetry
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-lean_telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-lean_telemetry}
+      # Used by the image only to initialise an EMPTY volume. Changing it later
+      # does not change the existing superuser's password.
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    # Starting point for the 4 vCPU / 8 GB host (docs/operations.md, "Resource
+    # budget"): ~1 GB shared buffers, modest per-operation memory, bounded
+    # connections and temporary files, autovacuum on. fsync and
+    # synchronous_commit keep their durable defaults. Error logs omit statement
+    # text and details so proof text and identifiers do not end up in logs.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-1GB}
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-3GB}
+      - -c
+      - work_mem=${POSTGRES_WORK_MEM:-8MB}
+      - -c
+      - maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-256MB}
+      - -c
+      - autovacuum_work_mem=${POSTGRES_AUTOVACUUM_WORK_MEM:-128MB}
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-40}
+      - -c
+      - temp_file_limit=${POSTGRES_TEMP_FILE_LIMIT:-4GB}
+      - -c
+      - max_parallel_workers_per_gather=1
+      - -c
+      - autovacuum=on
+      - -c
+      - max_wal_size=${POSTGRES_MAX_WAL_SIZE:-2GB}
+      - -c
+      - min_wal_size=256MB
+      - -c
+      - track_io_timing=on
+      - -c
+      - log_autovacuum_min_duration=30s
+      - -c
+      - log_lock_waits=on
+      - -c
+      - log_temp_files=64MB
+      - -c
+      - log_min_error_statement=panic
+      - -c
+      - log_error_verbosity=terse
     volumes:
       - telemetry_postgres:/var/lib/postgresql/data
+    networks: [db]
     healthcheck:
-      test: [CMD-SHELL, pg_isready -U lean_telemetry -d lean_telemetry]
+      test: [CMD-SHELL, 'pg_isready -q -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-4608m}
+    memswap_limit: ${POSTGRES_MEMORY_LIMIT:-4608m}
+    pids_limit: 256
+    cpus: ${POSTGRES_CPUS:-3}
+    # The image stops with SIGINT (fast shutdown); leave time for the
+    # shutdown checkpoint.
+    stop_grace_period: 60s
+    logging: *logging
+
+  migrate:
+    <<: *app
+    profiles: [migrate]
+    restart: "no"
+    command: [node, src/migrate.js, --provision-roles]
+    environment:
+      <<: *database
+      MIGRATION_PGUSER: ${POSTGRES_USER:-lean_telemetry}
+      MIGRATION_PGPASSWORD_FILE: /run/secrets/postgres_password
+      MIGRATION_LOCK_TIMEOUT_MS: ${MIGRATION_LOCK_TIMEOUT_MS:-}
+      MIGRATION_DDL_LOCK_TIMEOUT_MS: ${MIGRATION_DDL_LOCK_TIMEOUT_MS:-}
+      TELEMETRY_WRITER_PASSWORD_FILE: /run/secrets/telemetry_writer_password
+      TELEMETRY_COMPACTOR_PASSWORD_FILE: /run/secrets/telemetry_compactor_password
+      TELEMETRY_READER_PASSWORD_FILE: /run/secrets/telemetry_reader_password
+      TELEMETRY_RETENTION_PASSWORD_FILE: /run/secrets/telemetry_retention_password
+      TELEMETRY_BACKUP_PASSWORD_FILE: /run/secrets/telemetry_backup_password
+    secrets:
+      - postgres_password
+      - telemetry_writer_password
+      - telemetry_compactor_password
+      - telemetry_reader_password
+      - telemetry_retention_password
+      - telemetry_backup_password
+    healthcheck:
+      disable: true
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 64
+    cpus: 1
 
   collector:
-    image: ghcr.io/astroautomata/lean4-wasm-in-browser-telemetry:latest
+    <<: *app
     restart: unless-stopped
-    labels:
-      com.centurylinklabs.watchtower.enable: "true"
-    depends_on:
-      postgres:
-        condition: service_healthy
+    command: [node, src/server.js]
     environment:
-      PGHOST: postgres
-      PGPORT: 5432
-      PGDATABASE: lean_telemetry
-      PGUSER: lean_telemetry
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+      <<: *database
+      # Runtime writer only; the bootstrap credential never enters this container.
+      PGUSER: telemetry_writer
+      PGPASSWORD_FILE: /run/secrets/telemetry_writer_password
+      # Heap cap well below the container limit: request buffers, sockets and
+      # native memory live outside the V8 heap.
+      NODE_OPTIONS: --max-old-space-size=${COLLECTOR_HEAP_MB:-384}
+      PORT: "8080"
+      METRICS_PORT: "9464"
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://leangame.autumnofautumn.com}
-      REQUESTS_PER_MINUTE: ${REQUESTS_PER_MINUTE:-120}
-    ports:
-      - 127.0.0.1:8090:8080
-
-  watchtower:
-    image: containrrr/watchtower:1.7.1
-    restart: unless-stopped
-    depends_on:
-      - collector
-    environment:
-      WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_LABEL_ENABLE: "true"
-      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
+      # Only Caddy (on the edge network) may set the client IP header.
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-${TELEMETRY_EDGE_SUBNET:-10.247.81.0/28}}
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-}
+      DISK_PROBE_PATH: /run/disk-probe
+      DISK_ALERT_RATIO: ${DISK_ALERT_RATIO:-}
+      DISK_THROTTLE_RATIO: ${DISK_THROTTLE_RATIO:-}
+      DISK_PAUSE_RATIO: ${DISK_PAUSE_RATIO:-}
+      # Must stay below stop_grace_period (30 s).
+      DRAIN_TIMEOUT_MS: ${DRAIN_TIMEOUT_MS:-20000}
+      # Tuning (docs/design.md section 3). Empty means the built-in default.
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-}
+      MAX_EVENTS_PER_BATCH: ${MAX_EVENTS_PER_BATCH:-}
+      BODY_TIMEOUT_MS: ${BODY_TIMEOUT_MS:-}
+      REQUEST_TIMEOUT_MS: ${REQUEST_TIMEOUT_MS:-}
+      HEADERS_TIMEOUT_MS: ${HEADERS_TIMEOUT_MS:-}
+      KEEP_ALIVE_TIMEOUT_MS: ${KEEP_ALIVE_TIMEOUT_MS:-}
+      PG_POOL_SIZE: ${PG_POOL_SIZE:-}
+      EVENT_WRITERS: ${EVENT_WRITERS:-}
+      FEEDBACK_WRITERS: ${FEEDBACK_WRITERS:-}
+      POOL_ACQUIRE_TIMEOUT_MS: ${POOL_ACQUIRE_TIMEOUT_MS:-}
+      STATEMENT_TIMEOUT_MS: ${STATEMENT_TIMEOUT_MS:-}
+      LOCK_TIMEOUT_MS: ${LOCK_TIMEOUT_MS:-}
+      IDLE_IN_TX_TIMEOUT_MS: ${IDLE_IN_TX_TIMEOUT_MS:-}
+      QUERY_TIMEOUT_MS: ${QUERY_TIMEOUT_MS:-}
+      MAX_INFLIGHT_SUBMISSIONS: ${MAX_INFLIGHT_SUBMISSIONS:-}
+      FEEDBACK_INFLIGHT: ${FEEDBACK_INFLIGHT:-}
+      QUEUE_MAX_REQUESTS: ${QUEUE_MAX_REQUESTS:-}
+      QUEUE_MAX_EVENTS: ${QUEUE_MAX_EVENTS:-}
+      QUEUE_MAX_BYTES: ${QUEUE_MAX_BYTES:-}
+      QUEUE_MAX_AGE_MS: ${QUEUE_MAX_AGE_MS:-}
+      ACCOUNTING_FACTOR: ${ACCOUNTING_FACTOR:-}
+      RATE_BURST_SECONDS: ${RATE_BURST_SECONDS:-}
+      RATE_IP_REQUESTS_PER_MINUTE: ${RATE_IP_REQUESTS_PER_MINUTE:-}
+      RATE_IP_EVENTS_PER_MINUTE: ${RATE_IP_EVENTS_PER_MINUTE:-}
+      RATE_USER_REQUESTS_PER_MINUTE: ${RATE_USER_REQUESTS_PER_MINUTE:-}
+      RATE_USER_EVENTS_PER_MINUTE: ${RATE_USER_EVENTS_PER_MINUTE:-}
+      RATE_FEEDBACK_IP_PER_MINUTE: ${RATE_FEEDBACK_IP_PER_MINUTE:-}
+      RATE_FEEDBACK_USER_PER_MINUTE: ${RATE_FEEDBACK_USER_PER_MINUTE:-}
+      GLOBAL_REQUESTS_PER_SECOND: ${GLOBAL_REQUESTS_PER_SECOND:-}
+      GLOBAL_EVENTS_PER_SECOND: ${GLOBAL_EVENTS_PER_SECOND:-}
+      GLOBAL_BYTES_PER_SECOND: ${GLOBAL_BYTES_PER_SECOND:-}
+      GLOBAL_FEEDBACK_PER_SECOND: ${GLOBAL_FEEDBACK_PER_SECOND:-}
+      RATE_LIMIT_MAX_KEYS: ${RATE_LIMIT_MAX_KEYS:-}
+      RATE_LIMIT_IDLE_MS: ${RATE_LIMIT_IDLE_MS:-}
+      MICROBATCH_WINDOW_MS: ${MICROBATCH_WINDOW_MS:-}
+      MICROBATCH_MAX_EVENTS: ${MICROBATCH_MAX_EVENTS:-}
+      MICROBATCH_MAX_BYTES: ${MICROBATCH_MAX_BYTES:-}
+      LAST_SEEN_RESOLUTION_MS: ${LAST_SEEN_RESOLUTION_MS:-}
+      LAST_RECEIVED_RESOLUTION_MS: ${LAST_RECEIVED_RESOLUTION_MS:-}
+      LATE_EVENT_MAX_AGE_DAYS: ${LATE_EVENT_MAX_AGE_DAYS:-}
+      READINESS_INTERVAL_MS: ${READINESS_INTERVAL_MS:-}
+      READINESS_MAX_AGE_MS: ${READINESS_MAX_AGE_MS:-}
+    secrets: [telemetry_writer_password]
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DISK_PROBE_SOURCE:-disk_probe}:/run/disk-probe:ro
+    networks: [db, edge]
+    # Liveness only; the image's healthcheck does the same.
+    healthcheck:
+      test: [CMD, wget, -q, -T, "2", -O, /dev/null, http://127.0.0.1:8080/healthz]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    # Above DRAIN_TIMEOUT_MS so a drain finishes before SIGKILL.
+    stop_grace_period: 30s
+    mem_limit: ${COLLECTOR_MEMORY_LIMIT:-640m}
+    memswap_limit: ${COLLECTOR_MEMORY_LIMIT:-640m}
+    pids_limit: 128
+    cpus: ${COLLECTOR_CPUS:-2}
+
+  compactor:
+    <<: *app
+    profiles: [compactor]
+    restart: unless-stopped
+    command: [node, src/jobs/compactor.js]
+    environment:
+      <<: *database
+      COMPACTOR_PGUSER: telemetry_compactor
+      COMPACTOR_PGPASSWORD_FILE: /run/secrets/telemetry_compactor_password
+      NODE_OPTIONS: --max-old-space-size=${COMPACTOR_HEAP_MB:-192}
+      METRICS_PORT: "9465"
+      COMPACTOR_PRESSURE_URL: ${COMPACTOR_PRESSURE_URL:-http://collector:9464/internal/pressure}
+      COMPACTOR_PRESSURE_THRESHOLD: ${COMPACTOR_PRESSURE_THRESHOLD:-}
+      COMPACTION_MODE: ${COMPACTION_MODE:-shadow}
+      COMPACTION_INACTIVE_SECONDS: ${COMPACTION_INACTIVE_SECONDS:-}
+      COMPACTION_MIN_AGE_SECONDS: ${COMPACTION_MIN_AGE_SECONDS:-}
+      COMPACTION_ACTIVE_CHUNK_THRESHOLD: ${COMPACTION_ACTIVE_CHUNK_THRESHOLD:-}
+      COMPACTION_CHUNK_MAX_EVENTS: ${COMPACTION_CHUNK_MAX_EVENTS:-}
+      COMPACTION_CHUNK_MAX_BYTES: ${COMPACTION_CHUNK_MAX_BYTES:-}
+      COMPACTION_REPLACE_DELAY_SECONDS: ${COMPACTION_REPLACE_DELAY_SECONDS:-}
+      COMPACTION_REPLACE_LIMIT: ${COMPACTION_REPLACE_LIMIT:-}
+      DISK_PROBE_PATH: /run/disk-probe
+      DISK_ALERT_RATIO: ${DISK_ALERT_RATIO:-}
+      DISK_THROTTLE_RATIO: ${DISK_THROTTLE_RATIO:-}
+      DISK_PAUSE_RATIO: ${DISK_PAUSE_RATIO:-}
+    secrets: [telemetry_compactor_password]
+    volumes:
+      - ${DISK_PROBE_SOURCE:-disk_probe}:/run/disk-probe:ro
+    healthcheck:
+      test: [CMD, wget, -q, -T, "2", -O, /dev/null, http://127.0.0.1:9465/metrics]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    # The worker stops at a publication boundary; unfinished work is redone.
+    stop_grace_period: 60s
+    mem_limit: ${COMPACTOR_MEMORY_LIMIT:-384m}
+    memswap_limit: ${COMPACTOR_MEMORY_LIMIT:-384m}
+    pids_limit: 64
+    cpus: ${COMPACTOR_CPUS:-1}
+    # Low priority relative to the collector and PostgreSQL under contention.
+    cpu_shares: 256
+
+  exporter:
+    <<: *app
+    profiles: [tools]
+    restart: "no"
+    entrypoint: [node, tools/export.js]
+    command: []
+    environment:
+      <<: *database
+      READER_PGUSER: telemetry_reader
+      READER_PGPASSWORD_FILE: /run/secrets/telemetry_reader_password
+      NODE_OPTIONS: --max-old-space-size=${EXPORTER_HEAP_MB:-256}
+    secrets: [telemetry_reader_password]
+    # Must be writable by uid 1000 (docs/exports.md).
+    volumes:
+      - ${EXPORT_DIR:-./exports}:/exports
+    healthcheck:
+      disable: true
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 64
+    cpus: 1
+    cpu_shares: 256
+
+  retention:
+    <<: *app
+    profiles: [tools]
+    restart: "no"
+    # Dry run unless --execute and RETENTION_POLICY_ID are given (docs/operations.md).
+    entrypoint: [node, src/jobs/retention.js]
+    command: []
+    environment:
+      <<: *database
+      RETENTION_PGUSER: telemetry_retention
+      RETENTION_PGPASSWORD_FILE: /run/secrets/telemetry_retention_password
+      RETENTION_POLICY_ID: ${RETENTION_POLICY_ID:-}
+      RETENTION_DETAIL_DAYS: ${RETENTION_DETAIL_DAYS:-}
+      RETENTION_ATTEMPT_DAYS: ${RETENTION_ATTEMPT_DAYS:-}
+      RETENTION_FEEDBACK_DAYS: ${RETENTION_FEEDBACK_DAYS:-}
+      RETENTION_RECEIPT_DAYS: ${RETENTION_RECEIPT_DAYS:-}
+      # Last-copy guard (docs/compaction.md): a verified archive, or an
+      # explicit policy decision to expire the only copy.
+      RETENTION_ARCHIVE_DIR: ${RETENTION_ARCHIVE_DIR:-}
+      RETENTION_EXPIRE_LAST_COPY: ${RETENTION_EXPIRE_LAST_COPY:-false}
+    secrets: [telemetry_retention_password]
+    volumes:
+      - ${ARCHIVE_HOST_DIR:-./archive}:/archive:ro
+    healthcheck:
+      disable: true
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 64
+    cpus: 1
+    cpu_shares: 256
+
+  archive:
+    <<: *app
+    profiles: [tools]
+    restart: "no"
+    # Writes verified, self-contained chunk archives; never deletes rows
+    # (docs/compaction.md "Archive"). Upload ARCHIVE_HOST_DIR off-server with
+    # your own tool, then run `archive --verify --dir /archive` on that copy.
+    entrypoint: [node, src/jobs/archive.js]
+    command: [--dir, /archive]
+    environment:
+      <<: *database
+      READER_PGUSER: telemetry_reader
+      READER_PGPASSWORD_FILE: /run/secrets/telemetry_reader_password
+    secrets: [telemetry_reader_password]
+    volumes:
+      - ${ARCHIVE_HOST_DIR:-./archive}:/archive
+    healthcheck:
+      disable: true
+    mem_limit: 384m
+    memswap_limit: 384m
+    pids_limit: 64
+    cpus: 1
+    cpu_shares: 256
+
+  verify-permissions:
+    <<: *app
+    profiles: [tools]
+    restart: "no"
+    entrypoint: [node, tools/verify-permissions.js]
+    command: []
+    environment:
+      <<: *database
+      WRITER_PGPASSWORD_FILE: /run/secrets/telemetry_writer_password
+      COMPACTOR_PGPASSWORD_FILE: /run/secrets/telemetry_compactor_password
+      READER_PGPASSWORD_FILE: /run/secrets/telemetry_reader_password
+      RETENTION_PGPASSWORD_FILE: /run/secrets/telemetry_retention_password
+      BACKUP_PGPASSWORD_FILE: /run/secrets/telemetry_backup_password
+    secrets:
+      - telemetry_writer_password
+      - telemetry_compactor_password
+      - telemetry_reader_password
+      - telemetry_retention_password
+      - telemetry_backup_password
+    healthcheck:
+      disable: true
+    mem_limit: 128m
+    memswap_limit: 128m
+    pids_limit: 32
+    cpus: 0.5
+
+networks:
+  # PostgreSQL, metrics and jobs. No route outside Docker.
+  db:
+    name: ${TELEMETRY_DB_NETWORK:-telemetry_db}
+    internal: true
+  # Caddy -> collector only. Fixed subnet: TRUSTED_PROXY_CIDRS names it (or just
+  # Caddy's pinned address, outside the dynamic ip_range).
+  edge:
+    name: ${TELEMETRY_EDGE_NETWORK:-telemetry_edge}
+    internal: true
+    ipam:
+      config:
+        - subnet: ${TELEMETRY_EDGE_SUBNET:-10.247.81.0/28}
+          ip_range: ${TELEMETRY_EDGE_IP_RANGE:-10.247.81.8/29}
 
 volumes:
+  # Existing deployments: the volume the old stack created (root project:
+  # root_telemetry_postgres). New installs: `docker volume create` it first.
+  # External, so a wrong name fails loudly instead of initialising an empty
+  # database.
   telemetry_postgres:
+    name: ${POSTGRES_VOLUME:?set POSTGRES_VOLUME to the PostgreSQL data volume name}
+    external: true
+  # Empty; mounted read-only so the collector and compactor can statfs() the
+  # filesystem that holds Docker volumes, including PostgreSQL's data.
+  disk_probe: {}
+
+secrets:
+  postgres_password:
+    file: ${TELEMETRY_SECRETS_DIR:-./secrets}/postgres_password
+  telemetry_writer_password:
+    file: ${TELEMETRY_SECRETS_DIR:-./secrets}/telemetry_writer_password
+  telemetry_compactor_password:
+    file: ${TELEMETRY_SECRETS_DIR:-./secrets}/telemetry_compactor_password
+  telemetry_reader_password:
+    file: ${TELEMETRY_SECRETS_DIR:-./secrets}/telemetry_reader_password
+  telemetry_retention_password:
+    file: ${TELEMETRY_SECRETS_DIR:-./secrets}/telemetry_retention_password
+  telemetry_backup_password:
+    file: ${TELEMETRY_SECRETS_DIR:-./secrets}/telemetry_backup_password
