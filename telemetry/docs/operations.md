@@ -118,9 +118,13 @@ the release run summary).
    the image the old collector runs:
    `docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/astroautomata/lean4-wasm-in-browser-telemetry:latest`.
 2. **Create the secrets** (`$T/secrets/`, see [`secrets/README.md`](../secrets/README.md)).
-   `postgres_password` is the **existing** superuser password (the
-   `POSTGRES_PASSWORD` line of the old `.env`); the five role passwords are
-   new random values.
+   `postgres_password` is the **existing** superuser password; the five role
+   passwords are new random values. On this host the valid password was the
+   `POSTGRES_PASSWORD` line of `/root/.env`, not the one in `telemetry/.env`.
+   Check a candidate over the Docker network, never from inside the
+   container (the image trusts local and 127.0.0.1 connections, so any
+   password appears to work there):
+   `docker run --rm --network root_default -e PGPASSWORD="$candidate" postgres:17.10-alpine3.24 psql -h postgres -U lean_telemetry -d lean_telemetry -Atc 'select 1'`.
 3. **Back up first**, as the existing superuser (the backup role does not exist
    yet), onto the old network, and ship it off the host:
    ```sh

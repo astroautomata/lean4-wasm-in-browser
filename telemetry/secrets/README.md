@@ -22,8 +22,9 @@ install -d -m 0700 secrets
 for name in telemetry_writer telemetry_compactor telemetry_reader telemetry_retention telemetry_backup; do
   ( umask 077; openssl rand -hex 32 > "secrets/${name}_password" )
 done
-# Existing deployment: the CURRENT superuser password from the old .env
-# (POSTGRES_PASSWORD=...), not a new one; see docs/operations.md.
+# Existing deployment: the CURRENT superuser password, not a new one. Verify
+# which stored value authenticates over the Docker network first; see
+# docs/operations.md, "Migrating the existing deployment", step 2.
 ( umask 077; printf '%s\n' 'paste-the-existing-password' > secrets/postgres_password )
 chgrp 10001 secrets/*_password      # TELEMETRY_SECRETS_GID
 chmod 0440 secrets/*_password
