@@ -5,7 +5,18 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test"
+    "migrate": "node src/migrate.js",
+    "compactor": "node src/jobs/compactor.js",
+    "retention": "node src/jobs/retention.js",
+    "archive": "node src/jobs/archive.js",
+    "export": "node tools/export.js",
+    "storage-report": "node tools/storage-report.js",
+    "verify-permissions": "node tools/verify-permissions.js",
+    "bench": "node bench/loadgen.js",
+    "bench:verify": "node bench/verify.js",
+    "test": "node --test test/*.test.js",
+    "test:integration": "node --test --test-concurrency=1 test/integration/*.test.js",
+    "test:python": "python3 -I -m unittest discover -s test/python -t test/python"
   },
   "dependencies": {
     "pg": "^8.16.3"
