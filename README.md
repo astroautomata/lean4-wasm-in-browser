@@ -82,6 +82,52 @@ astroautomata.github.io
 Do not include the repository name in the CNAME target. The application uses
 root-relative asset URLs because the custom domain serves this project at `/`.
 
+## Asset hosting
+
+GitHub Pages has a soft bandwidth limit of 100 GB a month, and each new player
+downloads about 95 MB of Lean runtime and modules. The Pages deploy can
+therefore serve those three files from a Cloudflare R2 bucket instead, which
+doesn't charge for egress. The Docker image and the release gates are not
+affected: only the Pages copy changes.
+
+Before each Pages deploy, `scripts/publish-r2-assets.sh` (the "Publish Lean
+assets to R2" step in both Pages workflows):
+
+1. uploads `lean.wasm`, `lean.js` and `game-modules.tar.gz` once under
+   `visual-lean/<version>/`, where `<version>` is a hash of the three files.
+   A prefix is complete when its `manifest.json` exists; objects are never
+   overwritten or deleted, so they are cached as immutable;
+2. downloads each file through the public URL with the site's `Origin`, and
+   checks status, CORS headers, content type and encoding, and the SHA-256;
+3. writes `visual-lean/asset-base.json`, which tells the client where to load
+   from.
+
+If the upload or a check fails, the deploy stops. The Pages copy keeps its own
+files, and the client falls back to them if Lean fails to start from R2.
+
+Configuration is in repository secrets (Settings → Secrets and variables →
+Actions). Because they are secrets, the logs show their values, including
+the bucket name and the public URL, as `***`:
+
+| Secret | Value |
+| --- | --- |
+| `R2_ACCESS_KEY_ID` | Access Key ID of an R2 API token with Object Read & Write on this bucket only |
+| `R2_SECRET_ACCESS_KEY` | Secret Access Key of the same token |
+| `R2_ACCOUNT_ID` | Cloudflare account ID |
+| `R2_BUCKET` | `leangame-assets` |
+| `R2_PUBLIC_BASE` | `https://assets.autumnofautumn.com` (unset = off) |
+
+The bucket needs the custom domain `assets.autumnofautumn.com`, and a CORS
+policy allowing `GET` and `HEAD` from `https://leangame.autumnofautumn.com`
+with `Content-Encoding` in `ExposeHeaders` (the worker reads that header to
+decide whether to gunzip the module bundle itself). Don't add lifecycle
+(auto-delete) rules: an unchanged runtime keeps its prefix across many
+deploys.
+
+To roll back, delete the `R2_PUBLIC_BASE` secret and run "Publish latest browser image to
+GitHub Pages". The site then has no `asset-base.json` and loads everything from
+Pages.
+
 ## Source layout
 
 ```text
@@ -89,6 +135,7 @@ src/                              small release launcher
 public/lean4game/                 generated Lean4Game application
 public/visual-lean/               generated WASM runtime and module bundle
 scripts/sync-lean4game-client.mjs release client/data synchronization
+scripts/publish-r2-assets.sh      R2 upload for the Pages deploy
 telemetry/                        optional PostgreSQL event collector
 ```
 

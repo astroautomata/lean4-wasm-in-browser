@@ -239,7 +239,7 @@ jobs:
           done
           node scripts/run-cypress.cjs run \
             --browser "$CHROME_PATH" \
-            --spec "cypress/e2e/nng4-classic-diagnostics.cy.ts,cypress/e2e/nng4-classic-mode-persistence.cy.ts,cypress/e2e/nng4-implication-and-display-regressions.cy.ts,cypress/e2e/nng4-induction-transform.cy.ts,cypress/e2e/nng4-less-or-equal-total-goal-choice.cy.ts,cypress/e2e/nng4-release-routes.cy.ts,cypress/e2e/release-landing-page.cy.ts,cypress/e2e/telemetry-loading-consent.cy.ts,cypress/e2e/visual-loading-and-implication-guides.cy.ts,cypress/e2e/visualtest-local-wasm-smoke.cy.ts,cypress/e2e/visual-wasm-worker-diagnostic.cy.ts" \
+            --spec "cypress/e2e/nng4-classic-diagnostics.cy.ts,cypress/e2e/nng4-classic-mode-persistence.cy.ts,cypress/e2e/nng4-implication-and-display-regressions.cy.ts,cypress/e2e/nng4-induction-transform.cy.ts,cypress/e2e/nng4-less-or-equal-total-goal-choice.cy.ts,cypress/e2e/nng4-release-routes.cy.ts,cypress/e2e/release-landing-page.cy.ts,cypress/e2e/telemetry-loading-consent.cy.ts,cypress/e2e/visual-asset-base-fallback.cy.ts,cypress/e2e/visual-loading-and-implication-guides.cy.ts,cypress/e2e/visualtest-local-wasm-smoke.cy.ts,cypress/e2e/visual-wasm-worker-diagnostic.cy.ts" \
             --config baseUrl=http://127.0.0.1:8083 \
             --env VISUAL_TIMEOUT=600000,LEAN4GAME_MOUNT=/lean4game/index.html
       - name: Upload release validation evidence
@@ -340,6 +340,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Check out the release scripts
+        uses: actions/checkout@v4
+        with:
+          path: lean4.js
+          sparse-checkout: scripts
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -380,6 +385,17 @@ jobs:
             head -10 largest-files.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Off (a no-op) until the R2_PUBLIC_BASE repository secret is set.
+      # A failed upload or check stops the deploy.
+      - name: Publish Lean assets to R2
+        env:
+          R2_PUBLIC_BASE: ${{ secrets.R2_PUBLIC_BASE }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: bash lean4.js/scripts/publish-r2-assets.sh _site
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
