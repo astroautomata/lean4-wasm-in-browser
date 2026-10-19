@@ -62,6 +62,29 @@ test('stores a start, steps and a completion exactly, with trusted ingestion tim
   })
 })
 
+test('stores refused gestures and mode switches, with a refusal\'s reason and error as attributes', { skip }, async () => {
+  await withWriter({}, async ({ writer, db }) => {
+    const [start] = attemptEvents({ steps: 0, mode: 'visual' })
+    const shared = { user_uuid: start.userId, attempt_uuid: start.attemptId, mode: 'visual' }
+    const events = [
+      start,
+      event({ ...shared, sequence: 1, step_type: 'view', command: 'transform goal' }),
+      event({ ...shared, sequence: 2, step_type: 'rejected', command: 'drag_goal add_right_cancel',
+        reason: 'lean-error', error: 'type mismatch' }),
+    ]
+    assert.deepEqual(statuses(await writer.writeEvents(events)), ['accepted', 'accepted', 'accepted'])
+    // A retry is a duplicate, also once the details are compared against the stored row.
+    assert.deepEqual(statuses(await writer.writeEvents(events.slice(1))), ['duplicate', 'duplicate'])
+    const steps = (await db.pools.admin.query(
+      'SELECT sequence, step_type::text, command, attributes FROM proof_steps ORDER BY sequence')).rows
+    assert.deepEqual(steps, [
+      { sequence: 1, step_type: 'view', command: 'transform goal', attributes: {} },
+      { sequence: 2, step_type: 'rejected', command: 'drag_goal add_right_cancel',
+        attributes: { reason: 'lean-error', error: 'type mismatch' } },
+    ])
+  })
+})
+
 test('duplicates do not mutate any row', { skip }, async () => {
   await withWriter({}, async ({ writer, db }) => {
     const events = attemptEvents({ steps: 3, complete: true })

@@ -34,7 +34,9 @@ const SAFE_SEGMENT_RE = /^[A-Za-z0-9._-]{1,80}$/u
 const TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(?:(Z)|([+-])(\d{2}):(\d{2}))$/u
 const MODES = new Set(['visual', 'classic'])
 const EVENT_TYPES = new Set(['level_start', 'proof_step', 'level_complete'])
-const STEP_TYPES = new Set(['command', 'undo', 'reset', 'edit'])
+const STEP_TYPES = new Set(['command', 'undo', 'reset', 'edit', 'rejected', 'view'])
+// A `rejected` step's reason: a short client-defined slug such as `lean-error`.
+const REJECTION_REASON_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/u
 const BUILD_REVISION_KEYS = ['site', 'client', 'runtime', 'nng4', 'visualtest', 'lean']
 const BUILD_REVISION_RE = /^[0-9a-f]{7,40}(?:-dirty)?$/u
 const CLIENT_HEALTH_KEYS = ['queue_events', 'queue_bytes', 'evicted', 'expired', 'oversize', 'rejected', 'retries', 'sent']
@@ -147,7 +149,7 @@ function context(value) {
  * cleared to null rather than stored. */
 function typeFields(value) {
   const fields = {
-    stepType: null, command: null, fromLine: null, removedLines: null,
+    stepType: null, command: null, fromLine: null, removedLines: null, stepAttributes: {},
     initialScript: null, sourceAttemptId: null, playScript: null, leanScript: null,
   }
   if (value.event_type === 'level_start') {
@@ -171,6 +173,14 @@ function typeFields(value) {
       }
       fields.fromLine = value.from_line
       fields.removedLines = value.removed_lines
+    } else if (fields.stepType === 'rejected') {
+      if (value.reason !== undefined && value.reason !== null) {
+        if (typeof value.reason !== 'string' || !REJECTION_REASON_RE.test(value.reason)) return { problem: 'invalid_step' }
+        fields.stepAttributes.reason = value.reason
+      }
+      const error = optionalText(value.error, LIMITS.commandLength)
+      if (error.problem) return { problem: error.problem }
+      if (error.value !== null) fields.stepAttributes.error = error.value
     }
   } else {
     const play = optionalText(value.play_script, LIMITS.scriptLength)
@@ -221,7 +231,8 @@ export function validateEvent(value) {
 }
 
 /** The client-supplied content that defines an event's identity: everything
- * but the build and platform attributes (docs/replay-contract.md). Two events with the same
+ * but the build and platform attributes and a step's attributes (a rejected
+ * step's reason and error; docs/replay-contract.md). Two events with the same
  * id are duplicates exactly when these strings are equal. */
 export function canonicalEventContent(event) {
   return JSON.stringify([

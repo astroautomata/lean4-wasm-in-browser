@@ -24,7 +24,7 @@ FORMAT = 'lean-trajectory/1'
 CODEC = 'gzip'
 COLUMNS = ['sequence', 'elapsed_ms', 'step_type', 'command', 'from_line',
            'removed_lines', 'event_id', 'client_ts_us', 'received_at_us', 'attributes']
-STEP_TYPES = {0: 'command', 1: 'undo', 2: 'edit', 3: 'reset'}
+STEP_TYPES = {0: 'command', 1: 'undo', 2: 'edit', 3: 'reset', 4: 'rejected', 5: 'view'}
 DEFAULT_LIMITS = {
     'max_events': 2000,
     'max_uncompressed_bytes': 4 * 1024 * 1024,

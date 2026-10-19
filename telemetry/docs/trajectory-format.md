@@ -29,7 +29,7 @@ completion). Each row is a tuple in `columns` order:
 | --- | --- | --- |
 | 0 | `sequence` | difference from the previous row's sequence (first row: from `base.sequence`, so 0); > 0 after the first row |
 | 1 | `elapsed_ms` | difference from the previous row (may be negative) |
-| 2 | `step_type` | 0 `command`, 1 `undo`, 2 `edit`, 3 `reset` |
+| 2 | `step_type` | 0 `command`, 1 `undo`, 2 `edit`, 3 `reset`, 4 `rejected`, 5 `view` |
 | 3 | `command` | exact string as stored (may be empty) |
 | 4, 5 | `from_line`, `removed_lines` | integer or null (null for non-edit steps) |
 | 6 | `event_id` | 32 lowercase hex digits (the UUID without dashes) |
@@ -80,6 +80,10 @@ codec or limits semantics is a new format (`lean-trajectory/2`) with:
    chunk or archive in that format exists;
 3. round-trip tests against `/1` chunks and mixed `/1` + `/2` attempts;
 4. an update of this document and of `FORMAT.md` in new archives.
+
+Adding a step type code extends `/1` without a new format, readers first:
+both reference decoders must know a code before the compactor that writes it
+is deployed (codes 4 and 5 arrived together with migration 011).
 
 Never rewrite stored chunks in place; re-encoding is a new chunk published
 through the normal verify/publish lifecycle.

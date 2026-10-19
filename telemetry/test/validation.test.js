@@ -43,6 +43,30 @@ test('distinguishes a visual reset from a single undo', () => {
   assert.equal(validateEvent({ ...visual, step_type: 'restart', command: 'restart' }).reason, 'invalid_step')
 })
 
+test('records refused visual gestures and mode switches with their details as step attributes', () => {
+  const visual = { ...base, mode: 'visual', from_line: undefined, removed_lines: undefined }
+  const rejected = validateEvent({
+    ...visual, step_type: 'rejected', command: 'drag_goal add_right_cancel', reason: 'lean-error', error: 'type mismatch',
+  }).event
+  assert.equal(rejected.stepType, 'rejected')
+  assert.equal(rejected.command, 'drag_goal add_right_cancel')
+  assert.deepEqual(rejected.stepAttributes, { reason: 'lean-error', error: 'type mismatch' })
+  assert.deepEqual(validateEvent({ ...visual, step_type: 'rejected', command: 'cases h' }).event.stepAttributes, {})
+  const view = validateEvent({ ...visual, step_type: 'view', command: 'transform goal', reason: 'ignored' }).event
+  assert.equal(view.stepType, 'view')
+  assert.deepEqual(view.stepAttributes, {})
+  assert.deepEqual(valid({}).stepAttributes, {})
+
+  const rejectedReason = overrides => validateEvent({ ...visual, step_type: 'rejected', command: 'x', ...overrides }).reason
+  assert.equal(rejectedReason({ reason: 'Not A Slug' }), 'invalid_step')
+  assert.equal(rejectedReason({ reason: 'x'.repeat(65) }), 'invalid_step')
+  assert.equal(rejectedReason({ reason: ['busy'] }), 'invalid_step')
+  assert.equal(rejectedReason({ error: 7 }), 'invalid_type')
+  assert.equal(rejectedReason({ error: 'x'.repeat(LIMITS.commandLength + 1) }), 'script_too_large')
+  assert.equal(rejectedReason({ error: 'a\u0000b' }), 'invalid_text')
+  assert.equal(validateEvent({ ...visual, step_type: 'rejected', command: undefined }).reason, 'invalid_step')
+})
+
 const build = {
   site: '3c14d15a1b2c', client: '70a363d2460d-dirty', runtime: '70a363d2460d',
   nng4: '44a0a02f913e', visualtest: 'eec690a6a725', lean: '72a8f89f3126', built: '2026-10-05T14:00:00Z',

@@ -49,12 +49,16 @@ Attempts that fail a check, are too large or have malformed rows are listed
 with the reason in index.json.
 
 Step semantics:
-  visual  command  push the command (one interaction; may span several lines
+  visual  start    the empty proof, or the stack in initial_script (a JSON
+                   array of commands) when the attempt began from a restored
+                   proof or continues a completed attempt
+          command  push the command (one interaction; may span several lines
                    when a goal rotation precedes the tactic)
           undo     pop the most recent command. Clients before October 2026
                    also logged a full "reset proof" as a single undo; in that
                    data the two are indistinguishable.
           reset    clear every command (back to the opening position)
+          rejected a refused gesture, view a mode switch: the proof is unchanged
           phantom  a `"phantom": true` step was logged but never entered the
                    player's proof (clients before 2026-08-11 logged a click on
                    an already-closed goal this way); it leaves the proof as is
@@ -106,13 +110,28 @@ def is_subsequence(needle, haystack):
     return all(any(n == h for h in it) for n in needle)
 
 
-def replay_visual(steps, phantom=frozenset()):
+def visual_initial(attempt):
+    """The commands a visual attempt started from (initial_script, a JSON
+    array of strings), or None when initial_script is malformed."""
+    if not attempt['initial_script']:
+        return []
+    try:
+        commands = json.loads(attempt['initial_script'])
+    except ValueError:
+        return None
+    if not isinstance(commands, list) or not all(isinstance(c, str) for c in commands):
+        return None
+    return commands
+
+
+def replay_visual(steps, phantom=frozenset(), initial=()):
     """Return the command stack after each step, and the final stack as
-    (step index, command) pairs. Phantom steps leave the stack unchanged."""
-    stack = []
+    (step index, command) pairs; commands of the initial stack have index
+    None. Phantom, rejected and view steps leave the stack unchanged."""
+    stack = [(None, command) for command in initial]
     out = []
     for i, s in enumerate(steps):
-        if i in phantom:
+        if i in phantom or s['type'] in ('rejected', 'view'):
             pass
         elif s['type'] == 'undo':
             if stack:
@@ -138,6 +157,8 @@ def phantom_steps(stack, final):
         lines = [normalize_visual(l) for l in command.split('\n')]
         if final[position:position + len(lines)] == lines:
             position += len(lines)
+        elif i is None:
+            return None
         else:
             phantom.add(i)
     return phantom if position == len(final) else None
@@ -165,14 +186,17 @@ def check(attempt, steps):
     seqs = [s['sequence'] for s in steps]
     if seqs != list(range(seqs[0], seqs[0] + len(seqs))):
         return None, 'gap in step sequence', None
+    initial = visual_initial(attempt) if attempt['mode'] == 'visual' else None
+    if attempt['mode'] == 'visual' and initial is None:
+        return None, 'malformed visual initial_script', None
     if attempt['attempt_completed'] != 't':
-        after = replay_visual(steps)[0] if attempt['mode'] == 'visual' \
+        after = replay_visual(steps, initial=initial)[0] if attempt['mode'] == 'visual' \
             else replay_classic(attempt['initial_script'], steps)
         if after is None:
             return None, 'edit outside document (missing earlier edits)', None
         return after, 'unsolved: no final proof to verify against', set()
     if attempt['mode'] == 'visual':
-        after, stack = replay_visual(steps)
+        after, stack = replay_visual(steps, initial=initial)
         replayed = [normalize_visual(l) for cmd in after[-1] for l in cmd.split('\n')]
         final = [normalize_visual(l) for l in split_lines(attempt['play_script'])]
         if not is_subsequence(final, replayed):
@@ -181,7 +205,7 @@ def check(attempt, steps):
             return after, 'final play_script matches replay', set()
         phantom = phantom_steps(stack, final)
         if phantom:
-            return replay_visual(steps, phantom)[0], \
+            return replay_visual(steps, phantom, initial)[0], \
                 'final play_script matches replay once phantom steps are skipped', phantom
         return after, 'final play_script is a subsequence of replay', set()
     after = replay_classic(attempt['initial_script'], steps)

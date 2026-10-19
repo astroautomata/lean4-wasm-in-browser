@@ -224,7 +224,7 @@ Event fields (wire name → normalised field):
   `received_at`, set by PostgreSQL.
 - Per type (fields irrelevant to the type are cleared to null, never stored):
   - `level_start`: `initial_script` (string or null), `source_attempt_uuid` (UUID string or null).
-  - `proof_step`: `step_type` ∈ {`command`,`undo`,`reset`,`edit`}; `command`
+  - `proof_step`: `step_type` ∈ {`command`,`undo`,`reset`,`edit`,`rejected`,`view`}; `command`
     string (may be empty); for `edit`, `from_line` and `removed_lines` integers
     0..1000000; otherwise both cleared.
   - `level_complete`: `play_script`, `lean_script` (string or null).

@@ -96,11 +96,13 @@ const CHUNKS_SQL = `
   FROM trajectory_chunks WHERE chunk_id = ANY($1::bigint[]) AND state = 'published'`
 
 const INSERT_STEPS_SQL = `
-  INSERT INTO proof_steps (event_id, attempt_id, sequence, client_ts, elapsed_ms, step_type, command, from_line, removed_lines)
+  INSERT INTO proof_steps (event_id, attempt_id, sequence, client_ts, elapsed_ms, step_type, command, from_line, removed_lines,
+                           attributes)
   SELECT v.event_id, v.attempt_id, v.sequence, ${sqlFromMicros('v.ts_us')}, v.elapsed_ms, v.step_type::telemetry_step_type,
-         v.command, v.from_line, v.removed_lines
-  FROM unnest($1::uuid[], $2::uuid[], $3::int[], $4::bigint[], $5::int[], $6::text[], $7::text[], $8::int[], $9::int[])
-    AS v(event_id, attempt_id, sequence, ts_us, elapsed_ms, step_type, command, from_line, removed_lines)
+         v.command, v.from_line, v.removed_lines, v.attributes::jsonb
+  FROM unnest($1::uuid[], $2::uuid[], $3::int[], $4::bigint[], $5::int[], $6::text[], $7::text[], $8::int[], $9::int[],
+              $10::text[])
+    AS v(event_id, attempt_id, sequence, ts_us, elapsed_ms, step_type, command, from_line, removed_lines, attributes)
   ORDER BY v.event_id
   ON CONFLICT DO NOTHING
   RETURNING event_id::text`
@@ -385,6 +387,7 @@ export async function writeBatch(query, events, config) {
       rows.map(event => event.eventId), rows.map(event => event.attemptId), rows.map(event => event.sequence),
       rows.map(event => event.clientTsUs), rows.map(event => event.elapsedMs), rows.map(event => event.stepType),
       rows.map(event => event.command), rows.map(event => event.fromLine), rows.map(event => event.removedLines),
+      rows.map(event => JSON.stringify(event.stepAttributes ?? {})),
     ])
     const inserted = new Set(result.rows.map(row => row.event_id))
     const unresolved = []
