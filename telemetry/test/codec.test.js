@@ -42,6 +42,16 @@ const actions = [
     command: '', receivedAtUs: 1786017600999999 }),
 ]
 
+test('round-trips refused gestures and mode switches with their attributes', () => {
+  const gestures = [
+    action({ eventId: '2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6', stepType: 'rejected', command: 'drag_goal add_right_cancel',
+      attributes: { reason: 'lean-error', error: 'type mismatch' } }),
+    action({ eventId: '3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7', sequence: 2, stepType: 'view', command: 'transform goal' }),
+  ]
+  const encoded = encodeChunk({ attemptId, actions: gestures })
+  assert.deepEqual(decodeChunk(encoded.payload, manifestOf(encoded)), gestures)
+})
+
 test('round-trips every replay field, including gaps, NULL ingestion times and unicode', () => {
   const encoded = encodeChunk({ attemptId, actions })
   assert.equal(encoded.eventCount, 4)

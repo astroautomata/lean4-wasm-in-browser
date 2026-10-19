@@ -43,10 +43,17 @@ event whose context differs from the stored row is rejected
 
 - `initial_script`: the proof text the attempt started from, exactly as sent.
   Classic attempts send `''` for an empty start or the proof handed over from
-  the visual editor. Visual attempts send none (NULL): they start from the
-  level's empty proof. `''` and NULL are different values and both are kept.
+  the visual editor. Visual attempts that start from the level's empty proof
+  send none (NULL). A visual attempt that starts from a non-empty proof (a
+  solved or unfinished proof restored on reopening the level, or the proof of
+  a just-completed attempt that the player then undid or reset) sends its
+  starting commands as a JSON array of strings, one per `command` action, in
+  order; replay starts from that stack. `''` and NULL are different values and
+  both are kept.
 - `source_attempt_id`: the visual attempt a classic attempt was handed over
-  from, or NULL.
+  from, or the completed visual attempt a visual attempt continues; NULL
+  otherwise. A visual attempt ends at its completion: undoing or resetting
+  after it starts a new attempt, so each attempt has at most one completion.
 - `start_event_id`, `start_sequence`, `start_client_ts`, `start_elapsed_ms`:
   the start event itself. NULL when no start was ever accepted (legacy rows,
   or the start was lost or refused).
@@ -62,13 +69,13 @@ Each action holds:
 | --- | --- |
 | `event_id` | the client's stable id (identity, section 3) |
 | `sequence` | position within the attempt; replay order |
-| `step_type` | `command` appends one step; `undo` removes the last step; `reset` returns to the opening position in one action (logged as `undo` by clients before October 2026); `edit` is a classic line edit |
-| `command` | for `command`: the step's text; for `edit`: the inserted text (possibly several lines, possibly empty); for `undo`/`reset`: the label the client sent |
+| `step_type` | `command` appends one step; `undo` removes the last step; `reset` returns to the opening position in one action (logged as `undo` by clients before October 2026); `edit` is a classic line edit; `rejected` (a visual gesture refused by the canvas or by Lean) and `view` (a visual switch into or out of Transformation or Construction Mode) leave the proof unchanged |
+| `command` | for `command`: the step's text; for `edit`: the inserted text (possibly several lines, possibly empty); for `undo`/`reset`: the label the client sent; for `rejected`: the refused gesture in play-tactic notation; for `view`: the switch (`transform goal`, `transform h`, `side left`, `direction reverse`, `construct goal`, `close`, ...) |
 | `from_line`, `removed_lines` | `edit` only: replace `removed_lines` lines starting at zero-based line `from_line` with `command`; NULL for other types |
 | `client_ts` | client wall-clock time, microseconds (untrusted, informational) |
 | `elapsed_ms` | client milliseconds since the attempt began |
 | `received_at` | trusted server time of ingestion (NULL for rows ingested before migration 005) |
-| `attributes` | supported extension attributes of the action (`{}` today); preserved verbatim |
+| `attributes` | supported extension attributes of the action, preserved verbatim: `{}` except for `rejected`, which may hold `reason` (why it was refused, e.g. `lean-error`, `busy`, `statement-does-not-fit-goal`) and `error` (Lean's message). Not part of the action's identity (section 3) |
 
 Replay applies actions in ascending `sequence`. Transport order is irrelevant:
 events may arrive out of order, in any batch, and late. Sequences need not be

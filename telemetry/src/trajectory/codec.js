@@ -29,7 +29,7 @@ export const FORMAT = 'lean-trajectory/1'
 export const CODEC = 'gzip'
 export const COLUMNS = Object.freeze(['sequence', 'elapsed_ms', 'step_type', 'command', 'from_line',
   'removed_lines', 'event_id', 'client_ts_us', 'received_at_us', 'attributes'])
-export const STEP_TYPE_CODES = Object.freeze({ command: 0, undo: 1, edit: 2, reset: 3 })
+export const STEP_TYPE_CODES = Object.freeze({ command: 0, undo: 1, edit: 2, reset: 3, rejected: 4, view: 5 })
 const STEP_TYPES = Object.freeze(Object.fromEntries(Object.entries(STEP_TYPE_CODES).map(([name, code]) => [code, name])))
 
 export const DEFAULT_LIMITS = Object.freeze({

@@ -108,8 +108,8 @@ NULL, whatever their value):
 
 | `event_type` | Fields |
 | --- | --- |
-| `level_start` | `initial_script` (string or absent/null): the proof text the attempt started from, e.g. a proof handed over from the visual editor; `source_attempt_uuid` (UUID string or absent/null): the attempt it was handed over from |
-| `proof_step` | `step_type`: `command` (append one step), `undo` (remove the last step), `reset` (clear the proof), `edit` (classic line edit); `command`: string, may be empty, required; for `edit` also `from_line` and `removed_lines`, integers 0..1000000 (the edit replaces `removed_lines` lines starting at line `from_line` with the text in `command`) |
+| `level_start` | `initial_script` (string or absent/null): the proof text the attempt started from, e.g. a proof handed over from the visual editor, or for a visual attempt that does not start from the empty proof a JSON array of its starting commands ([replay-contract.md](replay-contract.md) 2.2); `source_attempt_uuid` (UUID string or absent/null): the attempt it was handed over from or continues |
+| `proof_step` | `step_type`: `command` (append one step), `undo` (remove the last step), `reset` (clear the proof), `edit` (classic line edit), `rejected` (a visual gesture that was refused; the proof is unchanged), `view` (a visual switch into or out of Transformation or Construction Mode; the proof is unchanged); `command`: string, may be empty, required; for `edit` also `from_line` and `removed_lines`, integers 0..1000000 (the edit replaces `removed_lines` lines starting at line `from_line` with the text in `command`); for `rejected` optionally `reason`, 1-64 characters of `[a-z0-9_-]` starting with a letter or digit, and `error`, text up to 65536 code units (stored in the action's `attributes`, not part of its identity) |
 | `level_complete` | `play_script`, `lean_script` (each a string or absent/null): the final proof as played and as Lean source |
 
 Missing or invalid step fields are `invalid_step`.
@@ -211,7 +211,7 @@ loss without generating traffic of its own.
 | `invalid_sequence` | `sequence` out of range |
 | `invalid_timestamp` | bad `ts` or `elapsed_ms` |
 | `invalid_text` | NUL or a lone surrogate in text |
-| `invalid_step` | bad or missing `step_type`, `command`, `from_line`, `removed_lines` |
+| `invalid_step` | bad or missing `step_type`, `command`, `from_line`, `removed_lines`, or a bad `reason` |
 | `script_too_large` | text over its ceiling (4.3) |
 | `context_mismatch` | the attempt already exists with a different user, game, world, level or mode |
 | `id_conflict` | this `event_id` is already stored with different content, type or attempt |
@@ -388,5 +388,6 @@ compatible for correct clients):
   budgets in section 8.
 
 Before October 2026, visual "reset proof" was logged as `undo`; current clients
-send `reset`. Event semantics for readers are in
+send `reset`. The `rejected` and `view` step types need migration 011 and this
+collector release; deploy both before the client that sends them (rule 1). Event semantics for readers are in
 [replay-contract.md](replay-contract.md).
