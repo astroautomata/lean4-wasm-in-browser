@@ -45,15 +45,18 @@ event whose context differs from the stored row is rejected
   Classic attempts send `''` for an empty start or the proof handed over from
   the visual editor. Visual attempts that start from the level's empty proof
   send none (NULL). A visual attempt that starts from a non-empty proof (a
-  solved or unfinished proof restored on reopening the level, or the proof of
-  a just-completed attempt that the player then undid or reset) sends its
-  starting commands as a JSON array of strings, one per `command` action, in
-  order; replay starts from that stack. `''` and NULL are different values and
-  both are kept.
+  solved or unfinished proof restored on reopening the level, the proof of a
+  just-completed attempt that the player then undid or reset, or the proof a
+  reset cleared when the player undoes that reset) sends its starting commands
+  as a JSON array of strings, one per `command` action, in order; replay
+  starts from that stack. `''` and NULL are different values and both are
+  kept.
 - `source_attempt_id`: the visual attempt a classic attempt was handed over
-  from, or the completed visual attempt a visual attempt continues; NULL
-  otherwise. A visual attempt ends at its completion: undoing or resetting
-  after it starts a new attempt, so each attempt has at most one completion.
+  from, the completed visual attempt a visual attempt continues, or the visual
+  attempt whose reset the player undid; NULL otherwise. A visual attempt ends
+  at its completion: undoing or resetting after it starts a new attempt, so
+  each attempt has at most one completion. Undoing a reset also starts a new
+  attempt, since an `undo` action removes only one step.
 - `start_event_id`, `start_sequence`, `start_client_ts`, `start_elapsed_ms`:
   the start event itself. NULL when no start was ever accepted (legacy rows,
   or the start was lost or refused).
