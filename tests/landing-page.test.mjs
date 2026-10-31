@@ -11,10 +11,10 @@ const expectedCopy = [
   'Visual Lean',
   'An experimental graphical user interface for writing Lean code.',
   'Lean verification runs locally on both desktop and mobile through WASM.',
-  'Start here: The Visual Natural Numbers Game',
-  'Prove the fundamental properties of arithmetic from scratch!',
-  'Elevator Pitch',
+  'Start here: Elevator Pitch',
   "Take a brief tour of Visual Lean's three modes.",
+  'The Visual Natural Numbers Game',
+  'Prove the fundamental properties of arithmetic from scratch!',
   'The Natural Numbers Game Classic',
   'Play the Natural Numbers Game as it was originally designed, typing Lean code yourself.',
 ]
@@ -59,10 +59,19 @@ test('credits are a plain heading rather than a scroll prompt', () => {
   }
 })
 
+test('the elevator pitch comes first and carries the only start-here note', () => {
+  for (const source of [app, page]) {
+    const positions = ['/pitch', '/visualNNG', '/classicNNG'].map((href) => source.search(new RegExp(`href(="|: ')${href}`, 'u')))
+    assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'destinations are out of order')
+    assert.equal(source.match(/Start here:/gu)?.length, 1, 'expected exactly one start-here note')
+    assert.ok(source.includes('Start here: Elevator Pitch'), 'start-here note is not on the elevator pitch')
+  }
+})
+
 test('each destination keeps its assigned accent in both sources', () => {
   const accents = [
-    ['/visualNNG', 'violet'],
     ['/pitch', 'teal'],
+    ['/visualNNG', 'violet'],
     ['/classicNNG', 'blue'],
   ]
   for (const [href, accent] of accents) {

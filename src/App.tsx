@@ -1,8 +1,8 @@
 import './App.css'
 
 const destinations = [
-  { title: 'Start here: The Visual Natural Numbers Game', description: 'Prove the fundamental properties of arithmetic from scratch!', href: '/visualNNG', accent: 'violet', symbol: '∀' },
-  { title: 'Elevator Pitch', description: "Take a brief tour of Visual Lean's three modes.", href: '/pitch', accent: 'teal', symbol: '→' },
+  { title: 'Start here: Elevator Pitch', description: "Take a brief tour of Visual Lean's three modes.", href: '/pitch', accent: 'teal', symbol: '→' },
+  { title: 'The Visual Natural Numbers Game', description: 'Prove the fundamental properties of arithmetic from scratch!', href: '/visualNNG', accent: 'violet', symbol: '∀' },
   { title: 'The Natural Numbers Game Classic', description: 'Play the Natural Numbers Game as it was originally designed, typing Lean code yourself.', href: '/classicNNG', accent: 'blue', symbol: 'ℕ' },
 ] as const
 
