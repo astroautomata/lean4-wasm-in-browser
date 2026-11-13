@@ -198,7 +198,7 @@ if (!(await exists(lean4gameRoot))) {
 }
 // Check every input before public/lean4game is deleted below; failing later
 // leaves the dev tree with a client but no game data.
-for (const gameName of ['NNG4', 'VisualTest']) {
+for (const gameName of ['NNG4', 'VisualTest', 'NNVG']) {
   const source = path.join(workspaceRoot, 'Lean4Game', gameName, '.lake', 'gamedata')
   if (!(await exists(source))) {
     throw new Error(`Missing generated game data for ${gameName}: ${source}`)
@@ -238,5 +238,7 @@ await copyGameData('NNG4')
 await applyEditableNngLevelNames()
 await omitNngAlgorithmWorld()
 await copyGameData('VisualTest')
+// The Natural Numbers Video Game: served at /g/local/NNVG/visual, unlisted.
+await copyGameData('NNVG')
 
 console.log(`Synced Lean4Game client to ${path.relative(lean4jsRoot, outDir)}`)

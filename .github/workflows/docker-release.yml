@@ -19,6 +19,11 @@ on:
         required: false
         default: main
         type: string
+      nnvg_ref:
+        description: NNVG branch, tag, or SHA
+        required: false
+        default: main
+        type: string
       runtime_run_id:
         description: Compatible prior release run containing the browser-runtime artifact
         required: false
@@ -49,6 +54,8 @@ jobs:
       nng4_ref: ${{ inputs.nng4_ref || 'main' }}
       visualtest_ref: ${{ inputs.visualtest_ref || 'main' }}
       include_nng4: true
+      nnvg_ref: ${{ inputs.nnvg_ref || 'main' }}
+      include_nnvg: true
     secrets:
       CAULI_ARTIFACT_TOKEN: ${{ secrets.CAULI_ARTIFACT_TOKEN }}
 
@@ -99,6 +106,8 @@ jobs:
           test -s visual-lean-artifact/modules/game-modules.tar.gz
           test -s visual-lean-artifact/gamedata/NNG4/game.json
           test -s visual-lean-artifact/gamedata/VisualTest/game.json
+          test -s visual-lean-artifact/gamedata/NNVG/game.json
+          test -s visual-lean-artifact/modules/nnvg/game-modules.tar.gz
           ! grep -q 'PThread' visual-lean-artifact/runtime/lean.js
           du -sh visual-lean-artifact
       # A reused runtime belongs to an older run. Preserve it on this release
@@ -170,7 +179,9 @@ jobs:
           curl --fail --silent http://127.0.0.1:8080/lean4game/index.html >/dev/null
           curl --fail --silent http://127.0.0.1:8080/lean4game/data/g/local/NNG4/game.json >/dev/null
           curl --fail --silent http://127.0.0.1:8080/lean4game/data/g/local/VisualTest/game.json >/dev/null
+          curl --fail --silent http://127.0.0.1:8080/lean4game/data/g/local/NNVG/game.json >/dev/null
           curl --fail --silent http://127.0.0.1:8080/visual-lean/modules/game-modules.tar.gz >/dev/null
+          curl --fail --silent http://127.0.0.1:8080/visual-lean/modules/nnvg/game-modules.tar.gz >/dev/null
           if curl --silent --head http://127.0.0.1:8080/ | grep --ignore-case -q '^Cross-Origin-'; then
             echo '::error::The canonical single-thread site unexpectedly requires cross-origin isolation.'
             exit 1
@@ -239,7 +250,7 @@ jobs:
           done
           node scripts/run-cypress.cjs run \
             --browser "$CHROME_PATH" \
-            --spec "cypress/e2e/nng4-classic-diagnostics.cy.ts,cypress/e2e/nng4-classic-mode-persistence.cy.ts,cypress/e2e/nng4-implication-and-display-regressions.cy.ts,cypress/e2e/nng4-induction-transform.cy.ts,cypress/e2e/nng4-less-or-equal-total-goal-choice.cy.ts,cypress/e2e/nng4-release-routes.cy.ts,cypress/e2e/release-landing-page.cy.ts,cypress/e2e/telemetry-loading-consent.cy.ts,cypress/e2e/visual-asset-base-fallback.cy.ts,cypress/e2e/visual-loading-and-implication-guides.cy.ts,cypress/e2e/visualtest-local-wasm-smoke.cy.ts,cypress/e2e/visual-wasm-worker-diagnostic.cy.ts" \
+            --spec "cypress/e2e/nng4-classic-diagnostics.cy.ts,cypress/e2e/nng4-classic-mode-persistence.cy.ts,cypress/e2e/nng4-implication-and-display-regressions.cy.ts,cypress/e2e/nng4-induction-transform.cy.ts,cypress/e2e/nng4-less-or-equal-total-goal-choice.cy.ts,cypress/e2e/nng4-release-routes.cy.ts,cypress/e2e/nnvg-browser-release.cy.ts,cypress/e2e/release-landing-page.cy.ts,cypress/e2e/telemetry-loading-consent.cy.ts,cypress/e2e/visual-asset-base-fallback.cy.ts,cypress/e2e/visual-loading-and-implication-guides.cy.ts,cypress/e2e/visualtest-local-wasm-smoke.cy.ts,cypress/e2e/visual-wasm-worker-diagnostic.cy.ts" \
             --config baseUrl=http://127.0.0.1:8083 \
             --env VISUAL_TIMEOUT=600000,LEAN4GAME_MOUNT=/lean4game/index.html
       - name: Upload release validation evidence
@@ -366,6 +377,8 @@ jobs:
           test -s _site/lean4game/index.html
           test -s _site/visual-lean/runtime/lean.wasm
           test -s _site/visual-lean/modules/game-modules.tar.gz
+          test -s _site/visual-lean/modules/nnvg/game-modules.tar.gz
+          test -s _site/lean4game/data/g/local/NNVG/game.json
           ! test -e _site/visual-lean/snapshots/game.snap.gz
           touch _site/.nojekyll
           printf '%s\n' 'leangame.autumnofautumn.com' > _site/CNAME

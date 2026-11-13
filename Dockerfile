@@ -30,6 +30,9 @@ COPY visual-lean-artifact/modules/ ./lean4.js/public/visual-lean/modules/
 COPY visual-lean-artifact/build-info.json ./lean4.js/public/visual-lean/build-info.json
 COPY visual-lean-artifact/gamedata/NNG4/ ./Lean4Game/NNG4/.lake/gamedata/
 COPY visual-lean-artifact/gamedata/VisualTest/ ./Lean4Game/VisualTest/.lake/gamedata/
+# The Natural Numbers Video Game is unlisted: served, but not on the landing
+# page. Only its game data is needed here; its modules are in modules/nnvg/.
+COPY visual-lean-artifact/gamedata/NNVG/ ./Lean4Game/NNVG/.lake/gamedata/
 
 WORKDIR /workspace/Lean4Game/lean4game
 RUN npm ci
@@ -45,12 +48,15 @@ RUN npm ci \
   && test -s public/visual-lean/runtime/lean.js \
   && test -s public/visual-lean/runtime/lean.wasm \
   && test -s public/visual-lean/modules/game-modules.tar.gz \
+  && test -s public/visual-lean/modules/nnvg/game-modules.tar.gz \
   && npm run sync-lean4game-client \
   && npm run build \
   && test -s dist/index.html \
   && test -s dist/lean4game/index.html \
   && test -s dist/lean4game/data/g/local/NNG4/game.json \
-  && test -s dist/lean4game/data/g/local/VisualTest/game.json
+  && test -s dist/lean4game/data/g/local/VisualTest/game.json \
+  && test -s dist/lean4game/data/g/local/NNVG/game.json \
+  && ! grep -q NNVG dist/index.html
 
 
 FROM nginx:1.27-alpine AS release
@@ -61,7 +67,8 @@ COPY --from=web-builder /workspace/lean4.js/dist/ /usr/share/nginx/html/
 RUN nginx -t \
   && test -s /usr/share/nginx/html/index.html \
   && test -s /usr/share/nginx/html/visual-lean/runtime/lean.wasm \
-  && test -s /usr/share/nginx/html/visual-lean/modules/game-modules.tar.gz
+  && test -s /usr/share/nginx/html/visual-lean/modules/game-modules.tar.gz \
+  && test -s /usr/share/nginx/html/visual-lean/modules/nnvg/game-modules.tar.gz
 
 EXPOSE 80
 

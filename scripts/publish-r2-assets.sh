@@ -54,6 +54,13 @@ fi
 origin="https://$cname"
 
 files=(runtime/lean.wasm runtime/lean.js modules/game-modules.tar.gz)
+# The Natural Numbers Video Game's own module bundle, beside NNG4's.
+nnvg_modules=modules/nnvg/game-modules.tar.gz
+has_nnvg=false
+if [[ -e "$lean/$nnvg_modules" ]]; then
+  files+=("$nnvg_modules")
+  has_nnvg=true
+fi
 for file in "${files[@]}"; do
   if [[ ! -s "$lean/$file" ]]; then
     echo "::error::$lean/$file is missing or empty."
@@ -61,8 +68,8 @@ for file in "${files[@]}"; do
   fi
 done
 
-# The runtime and module bundle must stay paired, so one version names all
-# three files.
+# The runtime and module bundles must stay paired, so one version names all
+# the files.
 sums="$(cd "$lean" && sha256sum "${files[@]}" | LC_ALL=C sort)"
 version="$(printf '%s\n' "$sums" | sha256sum | cut -c1-16)"
 prefix="visual-lean/$version"
@@ -104,6 +111,13 @@ elif [[ "$head_error" == *'(404)'* ]]; then
   # Already gzip. The worker decompresses it itself, so it must not get a
   # Content-Encoding.
   put "$lean/modules/game-modules.tar.gz" "$prefix/modules/game-modules.tar.gz" application/gzip
+  extra_files='[]'
+  if [[ "$has_nnvg" == true ]]; then
+    put "$lean/$nnvg_modules" "$prefix/$nnvg_modules" application/gzip
+    extra_files="$(jq -n --arg path "$nnvg_modules" \
+      --arg sha "$(sha256_of "$lean/$nnvg_modules")" --argjson bytes "$(bytes_of "$lean/$nnvg_modules")" \
+      '[{ path: $path, bytes: $bytes, sha256: $sha, contentType: "application/gzip", storedBytes: $bytes }]')"
+  fi
 
   jq -n \
     --arg version "$version" \
@@ -115,6 +129,7 @@ elif [[ "$head_error" == *'(404)'* ]]; then
     --argjson js_stored "$(bytes_of "$work/lean.js.gz")" \
     --arg modules_sha "$(sha256_of "$lean/modules/game-modules.tar.gz")" \
     --argjson modules_bytes "$(bytes_of "$lean/modules/game-modules.tar.gz")" \
+    --argjson extra_files "$extra_files" \
     '{
       version: $version,
       uploaded: $uploaded,
@@ -126,7 +141,7 @@ elif [[ "$head_error" == *'(404)'* ]]; then
           contentType: "text/javascript", contentEncoding: "gzip", storedBytes: $js_stored },
         { path: "modules/game-modules.tar.gz", bytes: $modules_bytes, sha256: $modules_sha,
           contentType: "application/gzip", storedBytes: $modules_bytes }
-      ]
+      ] + $extra_files
     }' > "$work/manifest.json"
   put "$work/manifest.json" "$prefix/manifest.json" application/json
 else
@@ -194,6 +209,7 @@ verify() {
 verify runtime/lean.wasm application/wasm gzip
 verify runtime/lean.js text/javascript gzip
 verify modules/game-modules.tar.gz application/gzip ''
+if [[ "$has_nnvg" == true ]]; then verify "$nnvg_modules" application/gzip ''; fi
 
 {
   echo '### Lean assets on R2'
