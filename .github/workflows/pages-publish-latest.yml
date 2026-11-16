@@ -49,6 +49,8 @@ jobs:
           test -s _site/lean4game/index.html
           test -s _site/visual-lean/runtime/lean.wasm
           test -s _site/visual-lean/modules/game-modules.tar.gz
+          test -s _site/visual-lean/modules/nnvg/game-modules.tar.gz
+          test -s _site/lean4game/data/g/local/NNVG/game.json
           ! test -e _site/visual-lean/snapshots/game.snap.gz
           touch _site/.nojekyll
           printf '%s\n' 'leangame.autumnofautumn.com' > _site/CNAME

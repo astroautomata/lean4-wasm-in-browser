@@ -134,14 +134,14 @@ elif [[ "$head_error" == *'(404)'* ]]; then
       version: $version,
       uploaded: $uploaded,
       run: $run,
-      files: [
+      files: ([
         { path: "runtime/lean.wasm", bytes: $wasm_bytes, sha256: $wasm_sha,
           contentType: "application/wasm", contentEncoding: "gzip", storedBytes: $wasm_stored },
         { path: "runtime/lean.js", bytes: $js_bytes, sha256: $js_sha,
           contentType: "text/javascript", contentEncoding: "gzip", storedBytes: $js_stored },
         { path: "modules/game-modules.tar.gz", bytes: $modules_bytes, sha256: $modules_sha,
           contentType: "application/gzip", storedBytes: $modules_bytes }
-      ] + $extra_files
+      ] + $extra_files)
     }' > "$work/manifest.json"
   put "$work/manifest.json" "$prefix/manifest.json" application/json
 else
