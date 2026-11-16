@@ -48,7 +48,7 @@ jobs:
   browser-runtime:
     name: Build single-thread Lean WASM module artifact
     if: ${{ inputs.runtime_run_id == '' && !inputs.reuse_published_image }}
-    uses: ryyanmapes/lean4game/.github/workflows/build-browser-lean-libs.yml@main
+    uses: astroautomata/lean4game/.github/workflows/build-browser-lean-libs.yml@main
     with:
       lean4game_ref: ${{ inputs.lean4game_ref || 'main' }}
       nng4_ref: ${{ inputs.nng4_ref || 'main' }}
@@ -76,19 +76,19 @@ jobs:
       - name: Check out Lean4Game client
         uses: actions/checkout@v4
         with:
-          repository: ryyanmapes/lean4game
+          repository: astroautomata/lean4game
           ref: ${{ inputs.lean4game_ref || 'main' }}
           path: Lean4Game/lean4game
       - name: Check out NNG4
         uses: actions/checkout@v4
         with:
-          repository: ryyanmapes/NNG4
+          repository: astroautomata/NNG4
           ref: ${{ inputs.nng4_ref || 'main' }}
           path: Lean4Game/NNG4
       - name: Check out VisualTest
         uses: actions/checkout@v4
         with:
-          repository: ryyanmapes/VisualTest
+          repository: astroautomata/VisualTest
           ref: ${{ inputs.visualtest_ref || 'main' }}
           path: Lean4Game/VisualTest
       - name: Download canonical Lean WASM runtime and modules
@@ -211,7 +211,7 @@ jobs:
       - name: Check out Lean4Game client
         uses: actions/checkout@v4
         with:
-          repository: ryyanmapes/lean4game
+          repository: astroautomata/lean4game
           ref: ${{ inputs.lean4game_ref || 'main' }}
           path: Lean4Game/lean4game
       - name: Log in to GitHub Container Registry
@@ -281,7 +281,7 @@ jobs:
       - name: Check out Lean4Game player tests
         uses: actions/checkout@v4
         with:
-          repository: ryyanmapes/lean4game
+          repository: astroautomata/lean4game
           ref: ${{ inputs.lean4game_ref || 'main' }}
           path: Lean4Game/lean4game
       - name: Log in to GitHub Container Registry

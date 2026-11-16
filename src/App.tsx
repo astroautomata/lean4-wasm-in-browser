@@ -36,7 +36,7 @@ function App() {
         <div className="copy-line">Visual Lean was coded with the help of Codex and Claude Code.</div>
         <div className="copy-line">Visual Lean is built on a WASM port of Lean 4, <a href="https://github.com/cauli/lean4-wasm-in-browser">Lean4.js</a>.</div>
         <div className="copy-line">The Natural Numbers Game was originally designed by Kevin Buzzard and Mohammad Pedramfar for Lean 3, and later ported to Lean 4 by Kevin Buzzard and Jon Eugster.</div>
-        <div className="copy-line">The code for Visual Lean can be found <a href="https://github.com/ryyanmapes/lean4game">publically on Github</a>. Visual Lean is distributed with a license info tbd</div>
+        <div className="copy-line">The code for Visual Lean can be found <a href="https://github.com/astroautomata/lean4game">publically on Github</a>. Visual Lean is distributed with a license info tbd</div>
       </div>
     </div>
   )

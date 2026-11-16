@@ -41,7 +41,7 @@ test('credit placeholders are resolved as links', () => {
     'https://astroautomata.com/',
     'https://www.damtp.cam.ac.uk/user/mjc249/home.html',
     'https://github.com/cauli/lean4-wasm-in-browser',
-    'https://github.com/ryyanmapes/lean4game',
+    'https://github.com/astroautomata/lean4game',
   ]) assert.ok(app.includes(`href="${url}"`), `missing credit link: ${url}`)
 })
 
