@@ -2,7 +2,7 @@
 
 Implementation status of the telemetry remediation plan (12 October 2026) on
 branch `telemetry-remediation` of this repository and of
-`ryyanmapes/lean4game` (the browser client). Nothing here is deployed: the
+`astroautomata/lean4game` (the browser client). Nothing here is deployed: the
 plan authorised implementation, not deployment, deletion, sampling or consent
 changes. What remains needs an operator, a separate machine or a recorded
 policy decision; it is listed per phase.
