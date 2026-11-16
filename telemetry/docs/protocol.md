@@ -137,10 +137,10 @@ Missing or invalid step fields are `invalid_step`.
 ### 4.4 Build and platform
 
 `build` describes the game build the client runs: optional revision strings
-`site`, `client`, `runtime`, `nng4`, `visualtest`, `lean` (7-40 lowercase hex
-digits, optionally suffixed `-dirty`) and `built` (a date string of at most 32
-characters). Malformed entries are dropped silently; a malformed `build` never
-rejects the event.
+`site`, `client`, `runtime`, `nng4`, `visualtest`, `nnvg`, `lean` (7-40
+lowercase hex digits, optionally suffixed `-dirty`) and `built` (a date string
+of at most 32 characters). Malformed entries are dropped silently; a malformed
+`build` never rejects the event.
 
 `platform` is the client's own coarse classification of where it runs:
 `browser`, one of `chrome`, `safari`, `firefox`, `edge`, `brave`, `samsung`,

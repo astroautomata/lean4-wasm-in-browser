@@ -95,8 +95,8 @@ to the exact site origins allowed to submit events.
   proof state and `attributes`; `user_id` only when telemetry is enabled.
 - `attributes` (attempts and feedback) holds, each when the client reported it,
   `build`: the game build the player ran (source revisions `site`, `client`,
-  `runtime`, `nng4`, `visualtest`, `lean`, each suffixed `-dirty` when built
-  from a modified checkout, and the UTC build time `built`; recorded by
+  `runtime`, `nng4`, `visualtest`, `nnvg`, `lean`, each suffixed `-dirty` when
+  built from a modified checkout, and the UTC build time `built`; recorded by
   `scripts/sync-lean4game-client.mjs` and published at
   `/lean4game/version.json`), and `platform`: the player's `browser` family
   (`chrome`, `safari`, `firefox`, `edge`, `brave`, `samsung`, `opera` or

@@ -91,6 +91,7 @@ async function gameBuild() {
     build.runtime = shortRevision(runtime.lean4gameRef)
     build.nng4 = shortRevision(runtime.nng4Ref)
     build.visualtest = shortRevision(runtime.visualTestRef)
+    build.nnvg = shortRevision(runtime.nnvgRef)
     build.lean = shortRevision(runtime.leanGithash)
   }
   build.built = `${new Date().toISOString().slice(0, 19)}Z`

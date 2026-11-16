@@ -85,6 +85,13 @@ test('keeps only well-formed build entries without losing the event', () => {
   assert.equal(validateBuild(null), null)
 })
 
+test('keeps the NNVG revision and drops a malformed one', () => {
+  assert.deepEqual(valid({ build: { site: '3c14d15a1b2c', nnvg: 'bc3406e53c30' } }).build,
+    { site: '3c14d15a1b2c', nnvg: 'bc3406e53c30' })
+  assert.deepEqual(valid({ build: { site: '3c14d15a1b2c', nnvg: 'main' } }).build, { site: '3c14d15a1b2c' })
+  assert.equal(valid({ build: { nnvg: null } }).build, null)
+})
+
 test('records the browser family and device type an event came from', () => {
   const platform = { browser: 'safari', device: 'mobile' }
   assert.deepEqual(valid({ platform }).platform, platform)

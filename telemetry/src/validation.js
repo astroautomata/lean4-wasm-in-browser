@@ -37,7 +37,7 @@ const EVENT_TYPES = new Set(['level_start', 'proof_step', 'level_complete'])
 const STEP_TYPES = new Set(['command', 'undo', 'reset', 'edit', 'rejected', 'view'])
 // A `rejected` step's reason: a short client-defined slug such as `lean-error`.
 const REJECTION_REASON_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/u
-const BUILD_REVISION_KEYS = ['site', 'client', 'runtime', 'nng4', 'visualtest', 'lean']
+const BUILD_REVISION_KEYS = ['site', 'client', 'runtime', 'nng4', 'visualtest', 'nnvg', 'lean']
 const BUILD_REVISION_RE = /^[0-9a-f]{7,40}(?:-dirty)?$/u
 const CLIENT_HEALTH_KEYS = ['queue_events', 'queue_bytes', 'evicted', 'expired', 'oversize', 'rejected', 'retries', 'sent']
 const BROWSERS = new Set(['chrome', 'safari', 'firefox', 'edge', 'brave', 'samsung', 'opera', 'unknown'])
