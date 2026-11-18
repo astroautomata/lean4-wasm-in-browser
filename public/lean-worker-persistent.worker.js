@@ -210,7 +210,10 @@ async function loadModuleBundle(url) {
     return { success: false, error: 'This browser cannot stream the module bundle' };
   }
 
-  const contentLength = Number(response.headers.get('content-length')) || 0;
+  // An HTTP Content-Encoding stream is transparently decoded before JS sees
+  // it, so its compressed Content-Length cannot be compared with body bytes:
+  // the count would run past the total. Report no total then.
+  const contentLength = encodedByHttp ? 0 : Number(response.headers.get('content-length')) || 0;
   let downloaded = 0;
   const progressStream = new TransformStream({
     transform(chunk, controller) {
